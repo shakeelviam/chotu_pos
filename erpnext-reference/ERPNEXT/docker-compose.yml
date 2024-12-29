@@ -1,0 +1,33 @@
+version: '3'
+
+services:
+  erpnext:
+    image: frappe/erpnext:v15.0.0
+    ports:
+      - "8000:8000"
+      - "9000:9000"
+    environment:
+      - MARIADB_HOST=db
+      - MYSQL_ROOT_PASSWORD=admin
+      - ADMIN_PASSWORD=admin
+    depends_on:
+      - db
+      - redis
+
+  db:
+    image: mariadb:10.6
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    environment:
+      - MYSQL_ROOT_PASSWORD=admin
+    volumes:
+      - ./mariadb-config.cnf:/etc/mysql/conf.d/mariadb-config.cnf:ro
+      - db-data:/var/lib/mysql
+
+  redis:
+    image: redis:alpine
+    volumes:
+      - redis-data:/data
+
+volumes:
+  db-data:
+  redis-data:
