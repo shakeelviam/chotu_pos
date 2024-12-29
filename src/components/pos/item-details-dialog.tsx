@@ -1,29 +1,26 @@
 "use client";
 
 import { useState } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { CartItem } from "@/types";
 import { NumberPad } from "./number-pad";
-import Image from "next/image";
-import { X } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 
 interface ItemDetailsDialogProps {
   item: CartItem;
   onClose: () => void;
   onUpdate: (item: CartItem) => void;
-  userRole: string;
 }
 
-export function ItemDetailsDialog({ item, onClose, onUpdate, userRole }: ItemDetailsDialogProps) {
+export function ItemDetailsDialog({ item, onClose, onUpdate }: ItemDetailsDialogProps) {
   const [quantity, setQuantity] = useState(item.quantity.toString());
   const [rate, setRate] = useState(item.rate.toString());
   const [discountPercentage, setDiscountPercentage] = useState(item.discount_percentage?.toString() || "0");
   const [activeInput, setActiveInput] = useState<"quantity" | "rate" | "discount">("quantity");
-  const [requiresApproval, setRequiresApproval] = useState(false);
   const { toast } = useToast();
 
   const handleNumberClick = (value: string) => {
@@ -101,183 +98,104 @@ export function ItemDetailsDialog({ item, onClose, onUpdate, userRole }: ItemDet
       toast({
         variant: "destructive",
         title: "Insufficient stock",
-        description: `Only ${item.actual_qty} ${item.uom} available`,
+        description: `Only ${item.actual_qty} units available`,
       });
-      return;
-    }
-
-    if (newRate <= 0) {
-      toast({
-        variant: "destructive",
-        title: "Invalid rate",
-        description: "Rate must be greater than 0",
-      });
-      return;
-    }
-
-    // Rate change validation
-    const rateChange = Math.abs((newRate - item.standard_rate) / item.standard_rate * 100);
-    if (rateChange > 10 && userRole !== "Manager") {
-      setRequiresApproval(true);
       return;
     }
 
     // Calculate amounts
-    const discountAmount = (qty * newRate * discount) / 100;
-    const amount = qty * newRate - discountAmount;
+    const amount = qty * newRate;
+    const discountAmount = (amount * discount) / 100;
 
     onUpdate({
       ...item,
       quantity: qty,
       rate: newRate,
+      amount: amount - discountAmount,
       discount_percentage: discount,
-      discount_amount: discountAmount,
-      amount
+      discount_amount: discountAmount
     });
     onClose();
   };
 
   return (
-    <Dialog open={true} onOpenChange={onClose}>
-      <DialogContent className="max-w-2xl">
+    <Dialog open onOpenChange={onClose}>
+      <DialogContent className="max-w-[600px]">
         <DialogHeader>
-          <div className="flex justify-between items-center">
-            <DialogTitle>Item Details</DialogTitle>
-            <Button variant="ghost" size="icon" onClick={onClose}>
-              <X className="h-4 w-4" />
-            </Button>
-          </div>
+          <DialogTitle>{item.item_name}</DialogTitle>
+          <DialogDescription>Item Code: {item.item_code}</DialogDescription>
         </DialogHeader>
 
-        <div className="grid grid-cols-2 gap-6">
-          <div className="space-y-4">
-            {/* Item Image and Basic Info */}
-            <div className="relative aspect-square bg-muted rounded-lg overflow-hidden">
-              {item.image ? (
-                <Image
-                  src={item.image}
-                  alt={item.item_name}
-                  fill
-                  className="object-cover"
-                />
-              ) : (
-                <div className="w-full h-full flex items-center justify-center text-muted-foreground">
-                  No Image
-                </div>
-              )}
+        <div className="max-h-[600px] overflow-y-auto pr-4">
+          <div className="grid gap-4 py-4">
+            <div className="space-y-2">
+              <Label>Quantity</Label>
+              <Input
+                type="text"
+                value={quantity}
+                className="text-left"
+                readOnly
+                onClick={() => setActiveInput("quantity")}
+              />
             </div>
 
-            <div>
-              <h3 className="font-medium">{item.item_name}</h3>
-              <p className="text-sm text-muted-foreground">{item.item_code}</p>
+            <div className="space-y-2">
+              <Label>Rate (KD)</Label>
+              <Input
+                type="text"
+                value={rate}
+                className="text-left"
+                readOnly
+                onClick={() => setActiveInput("rate")}
+              />
             </div>
 
-            {/* Item Details */}
-            <div className="grid grid-cols-2 gap-4 text-sm">
-              <div>
-                <Label>UOM</Label>
-                <div className="mt-1">{item.uom}</div>
-              </div>
-              <div>
-                <Label>Conversion Factor</Label>
-                <div className="mt-1">{item.conversion_factor}</div>
-              </div>
-              <div>
-                <Label>Available Qty</Label>
-                <div className="mt-1">{item.actual_qty} {item.uom}</div>
-              </div>
-              <div>
-                <Label>Standard Rate</Label>
-                <div className="mt-1">{item.standard_rate.toFixed(3)} KD</div>
-              </div>
-              <div>
-                <Label>Warehouse</Label>
-                <div className="mt-1">{item.warehouse}</div>
-              </div>
-            </div>
-          </div>
-
-          <div className="space-y-6">
-            {/* Quantity, Rate, Discount Inputs */}
-            <div className="space-y-4">
-              <div>
-                <Label>Quantity ({item.uom})</Label>
-                <Input
-                  value={quantity}
-                  onChange={(e) => setQuantity(e.target.value)}
-                  onFocus={() => setActiveInput("quantity")}
-                  className="text-right"
-                />
-              </div>
-
-              <div>
-                <Label>Rate (KD)</Label>
-                <Input
-                  value={rate}
-                  onChange={(e) => setRate(e.target.value)}
-                  onFocus={() => setActiveInput("rate")}
-                  className="text-right"
-                />
-              </div>
-
-              <div>
-                <Label>Discount (%)</Label>
-                <Input
-                  value={discountPercentage}
-                  onChange={(e) => setDiscountPercentage(e.target.value)}
-                  onFocus={() => setActiveInput("discount")}
-                  className="text-right"
-                />
-              </div>
+            <div className="space-y-2">
+              <Label>Discount (%)</Label>
+              <Input
+                type="text"
+                value={discountPercentage}
+                className="text-left"
+                readOnly
+                onClick={() => setActiveInput("discount")}
+              />
             </div>
 
-            {/* Number Pad */}
             <NumberPad
               onNumberClick={handleNumberClick}
               onBackspace={handleBackspace}
               onClear={handleClear}
               onDot={handleDot}
+              onQuantity={() => setActiveInput("quantity")}
+              onRate={() => setActiveInput("rate")}
+              onDiscount={() => setActiveInput("discount")}
+              activeInput={activeInput}
+              className="mt-2"
             />
 
-            {/* Total */}
-            <div className="text-right space-y-2">
-              <div className="text-sm text-muted-foreground">
-                {quantity} {item.uom} × {rate} KD
-                {parseFloat(discountPercentage) > 0 && ` - ${discountPercentage}%`}
+            <div className="space-y-2 pt-4">
+              <div className="flex justify-between text-sm">
+                <span>Amount</span>
+                <span>KD {(parseFloat(quantity) * parseFloat(rate)).toFixed(3)}</span>
               </div>
-              <div className="text-lg font-medium">
-                Total: {(parseFloat(quantity) * parseFloat(rate) * (1 - parseFloat(discountPercentage) / 100)).toFixed(3)} KD
+              {parseFloat(discountPercentage) > 0 && (
+                <div className="flex justify-between text-sm text-destructive">
+                  <span>Discount ({discountPercentage}%)</span>
+                  <span>- KD {((parseFloat(quantity) * parseFloat(rate) * parseFloat(discountPercentage)) / 100).toFixed(3)}</span>
+                </div>
+              )}
+              <div className="flex justify-between font-medium border-t pt-2">
+                <span>Total</span>
+                <span>KD {(parseFloat(quantity) * parseFloat(rate) * (1 - parseFloat(discountPercentage) / 100)).toFixed(3)}</span>
               </div>
-            </div>
-
-            {/* Action Buttons */}
-            <div className="flex justify-end space-x-2">
-              <Button variant="outline" onClick={onClose}>Cancel</Button>
-              <Button onClick={handleUpdate}>Update</Button>
             </div>
           </div>
         </div>
 
-        {/* Manager Approval Dialog */}
-        {requiresApproval && (
-          <Dialog open={requiresApproval} onOpenChange={() => setRequiresApproval(false)}>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Manager Approval Required</DialogTitle>
-              </DialogHeader>
-              <p>Rate change exceeds 10%. Please get manager approval to proceed.</p>
-              <div className="flex justify-end space-x-2 mt-4">
-                <Button variant="outline" onClick={() => setRequiresApproval(false)}>Cancel</Button>
-                <Button onClick={() => {
-                  setRequiresApproval(false);
-                  // TODO: Implement manager approval flow
-                }}>
-                  Get Approval
-                </Button>
-              </div>
-            </DialogContent>
-          </Dialog>
-        )}
+        <div className="flex justify-end gap-2 pt-4 border-t">
+          <Button variant="outline" onClick={onClose}>Cancel</Button>
+          <Button onClick={handleUpdate}>Update</Button>
+        </div>
       </DialogContent>
     </Dialog>
   );

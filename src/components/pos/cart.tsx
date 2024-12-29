@@ -31,7 +31,7 @@ export function Cart({
   // Calculate totals
   const subtotal = items.reduce((sum, item) => sum + item.amount, 0);
   const totalDiscount = items.reduce((sum, item) => sum + (item.discount_amount || 0), 0);
-  const additionalDiscountAmount = (subtotal * additionalDiscount) / 100;
+  const additionalDiscountAmount = additionalDiscount ? (subtotal - totalDiscount) * (additionalDiscount / 100) : 0;
   const tax = 0; // TODO: Implement tax calculation
   const grandTotal = subtotal - totalDiscount - additionalDiscountAmount + tax;
 
@@ -153,17 +153,21 @@ export function Cart({
               type="number"
               min="0"
               max="100"
-              value={additionalDiscount}
-              onChange={(e) =>
-                onAdditionalDiscountChange(parseFloat(e.target.value) || 0)
-              }
+              value={additionalDiscount || ""}
+              placeholder="0"
+              onChange={(e) => {
+                const value = e.target.value;
+                onAdditionalDiscountChange(value ? parseFloat(value) : 0);
+              }}
               className="w-20"
             />
             <div className="flex-1 flex justify-between text-sm text-destructive">
               <span>Additional Discount (%)</span>
-              <span>
-                - {currencySymbol} {additionalDiscountAmount.toFixed(3)}
-              </span>
+              {additionalDiscountAmount > 0 && (
+                <span>
+                  - {currencySymbol} {additionalDiscountAmount.toFixed(3)}
+                </span>
+              )}
             </div>
           </div>
           {tax > 0 && (
@@ -185,7 +189,7 @@ export function Cart({
         <Button
           className="w-full"
           size="lg"
-          onClick={onCheckout}
+          onClick={() => onCheckout()}
           disabled={items.length === 0}
         >
           Checkout

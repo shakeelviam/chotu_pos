@@ -6,6 +6,10 @@ interface NumberPadProps {
   onBackspace: () => void;
   onClear: () => void;
   onDot: () => void;
+  onQuantity?: () => void;
+  onRate?: () => void;
+  onDiscount?: () => void;
+  activeInput: "quantity" | "rate" | "discount";
   className?: string;
 }
 
@@ -14,51 +18,82 @@ export function NumberPad({
   onBackspace,
   onClear,
   onDot,
+  onQuantity,
+  onRate,
+  onDiscount,
+  activeInput,
   className,
 }: NumberPadProps) {
   const numbers = ["7", "8", "9", "4", "5", "6", "1", "2", "3", "0"];
 
   return (
-    <div
-      className={cn(
-        "grid grid-cols-3 gap-2 p-2 bg-gradient-to-br from-card to-secondary/5 rounded-lg border",
-        className
-      )}
-    >
-      {numbers.map((num) => (
+    <div className={cn("grid gap-2", className)}>
+      {/* Action buttons */}
+      <div className="grid grid-cols-3 gap-2">
         <Button
-          key={num}
-          variant="outline"
-          className={cn(
-            "h-12 text-lg font-medium hover:bg-primary hover:text-primary-foreground transition-colors",
-            num === "0" && "col-span-2"
-          )}
-          onClick={() => onNumberClick(num)}
+          variant={activeInput === "quantity" ? "default" : "outline"}
+          className="h-10"
+          onClick={onQuantity}
         >
-          {num}
+          Quantity
         </Button>
-      ))}
-      <Button
-        variant="outline"
-        className="h-12 text-lg font-medium hover:bg-primary hover:text-primary-foreground transition-colors"
-        onClick={onDot}
-      >
-        .
-      </Button>
-      <Button
-        variant="outline"
-        className="h-12 col-span-2 bg-destructive/10 hover:bg-destructive hover:text-destructive-foreground transition-colors"
-        onClick={onClear}
-      >
-        Clear
-      </Button>
-      <Button
-        variant="outline"
-        className="h-12 bg-primary/10 hover:bg-primary hover:text-primary-foreground transition-colors"
-        onClick={onBackspace}
-      >
-        ←
-      </Button>
+        <Button
+          variant={activeInput === "rate" ? "default" : "outline"}
+          className="h-10"
+          onClick={onRate}
+        >
+          Rate
+        </Button>
+        <Button
+          variant={activeInput === "discount" ? "default" : "outline"}
+          className="h-10"
+          onClick={onDiscount}
+        >
+          Discount
+        </Button>
+      </div>
+
+      {/* Number pad */}
+      <div className="grid grid-cols-3 gap-2">
+        {numbers.map((num) => (
+          <Button
+            key={num}
+            variant="outline"
+            className={cn(
+              "h-10 text-lg font-medium hover:bg-primary hover:text-primary-foreground transition-colors",
+              num === "0" && "col-span-2"
+            )}
+            onClick={() => onNumberClick(num)}
+          >
+            {num}
+          </Button>
+        ))}
+        <Button
+          variant="outline"
+          className="h-10 text-lg font-medium hover:bg-primary hover:text-primary-foreground transition-colors"
+          onClick={onDot}
+        >
+          .
+        </Button>
+      </div>
+
+      {/* Action buttons */}
+      <div className="grid grid-cols-2 gap-2">
+        <Button
+          variant="outline"
+          className="h-10 bg-destructive/10 hover:bg-destructive hover:text-destructive-foreground transition-colors"
+          onClick={onClear}
+        >
+          Clear
+        </Button>
+        <Button
+          variant="outline"
+          className="h-10 bg-primary/10 hover:bg-primary hover:text-primary-foreground transition-colors"
+          onClick={onBackspace}
+        >
+          ←
+        </Button>
+      </div>
     </div>
   );
 }

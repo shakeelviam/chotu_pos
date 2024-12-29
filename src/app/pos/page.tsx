@@ -137,15 +137,24 @@ export default function POSPage() {
 
   const handlePaymentComplete = async (payments: any[]) => {
     try {
-      const total = cartItems.reduce((acc, item) => acc + item.amount, 0) * (1 - additionalDiscount / 100);
+      // Calculate totals
+      const subtotal = cartItems.reduce((sum, item) => sum + item.amount, 0);
+      const totalDiscount = cartItems.reduce((sum, item) => sum + (item.discount_amount || 0), 0);
+      const additionalDiscountAmount = additionalDiscount ? (subtotal - totalDiscount) * (additionalDiscount / 100) : 0;
+      const grandTotal = subtotal - totalDiscount - additionalDiscountAmount;
       
       const invoice = {
         items: cartItems,
-        total_amount: total,
+        total_amount: grandTotal,
         payments,
         customer: "Cash Customer",
         posting_date: new Date().toISOString(),
-        is_return: false
+        is_return: false,
+        discounts: {
+          item_discount: totalDiscount,
+          additional_discount: additionalDiscountAmount,
+          additional_discount_percentage: additionalDiscount
+        }
       };
       
       // Mock successful payment
@@ -363,7 +372,12 @@ export default function POSPage() {
         <PaymentMethods
           open={showPayment}
           onClose={() => setShowPayment(false)}
-          total={cartItems.reduce((acc, item) => acc + item.amount, 0) * (1 - additionalDiscount / 100)}
+          total={(() => {
+            const subtotal = cartItems.reduce((sum, item) => sum + item.amount, 0);
+            const totalDiscount = cartItems.reduce((sum, item) => sum + (item.discount_amount || 0), 0);
+            const additionalDiscountAmount = additionalDiscount ? (subtotal - totalDiscount) * (additionalDiscount / 100) : 0;
+            return subtotal - totalDiscount - additionalDiscountAmount;
+          })()}
           currencySymbol="KD"
           onSubmit={handlePaymentComplete}
         />
