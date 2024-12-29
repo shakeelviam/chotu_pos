@@ -14,10 +14,10 @@ import { mockItems } from "@/lib/mock";
 import {
   RefreshCw,
   ShoppingBag,
-  History,
   LogOut,
   Save,
   X as CloseIcon,
+  FileText,
 } from "lucide-react";
 import {
   Dialog,
@@ -34,6 +34,10 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { InvoiceDialog } from "@/components/pos/invoice-dialog";
+import { createInvoice, printInvoice, emailInvoice } from "@/lib/invoice";
+import { useInvoiceStore } from "@/lib/store/invoice-store";
+import { OrdersDialog } from "@/components/pos/orders-dialog";
 
 export default function POSPage() {
   const [items, setItems] = useState<Item[]>([]);
@@ -42,14 +46,24 @@ export default function POSPage() {
   const [showSyncDialog, setShowSyncDialog] = useState(false);
   const [showClosePOSDialog, setShowClosePOSDialog] = useState(false);
   const [showPayment, setShowPayment] = useState(false);
+  const [showOrdersDialog, setShowOrdersDialog] = useState(false);
+  const [additionalDiscount, setAdditionalDiscount] = useState(0);
+  const [customer, setCustomer] = useState("");
+  const [selectedGroup, setSelectedGroup] = useState("");
+  const [currentInvoice, setCurrentInvoice] = useState<POSInvoice | null>(null);
+  const [showInvoice, setShowInvoice] = useState(false);
   const [showRecentOrders, setShowRecentOrders] = useState(false);
   const [showDraftOrders, setShowDraftOrders] = useState(false);
-  const [additionalDiscount, setAdditionalDiscount] = useState(0);
   const [showPrintDialog, setShowPrintDialog] = useState(false);
   const [completedInvoices, setCompletedInvoices] = useState<any[]>([]);
+  const [showDraftsDialog, setShowDraftsDialog] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
   const router = useRouter();
+  const addInvoice = useInvoiceStore((state) => state.addInvoice);
+  const saveDraft = useInvoiceStore((state) => state.saveDraft);
+  const drafts = useInvoiceStore((state) => state.drafts);
+  const resumeDraft = useInvoiceStore((state) => state.resumeDraft);
 
   useEffect(() => {
     // Load mock items on mount
@@ -137,28 +151,13 @@ export default function POSPage() {
 
   const handlePaymentComplete = async (payments: any[]) => {
     try {
-      // Calculate totals
-      const subtotal = cartItems.reduce((sum, item) => sum + item.amount, 0);
-      const totalDiscount = cartItems.reduce((sum, item) => sum + (item.discount_amount || 0), 0);
-      const additionalDiscountAmount = additionalDiscount ? (subtotal - totalDiscount) * (additionalDiscount / 100) : 0;
-      const grandTotal = subtotal - totalDiscount - additionalDiscountAmount;
+      const invoice = createInvoice(cartItems, "Cash Customer", payments, additionalDiscount);
       
-      const invoice = {
-        items: cartItems,
-        total_amount: grandTotal,
-        payments,
-        customer: "Cash Customer",
-        posting_date: new Date().toISOString(),
-        is_return: false,
-        discounts: {
-          item_discount: totalDiscount,
-          additional_discount: additionalDiscountAmount,
-          additional_discount_percentage: additionalDiscount
-        }
-      };
+      // Add to invoice store
+      addInvoice(invoice);
       
-      // Mock successful payment
-      setCompletedInvoices(prev => [...prev, invoice]);
+      // Set current invoice for display
+      setCurrentInvoice(invoice);
       
       toast({
         title: "Success",
@@ -166,7 +165,7 @@ export default function POSPage() {
       });
       
       setShowPayment(false);
-      setShowPrintDialog(true);
+      setShowInvoice(true);
       
     } catch (error) {
       toast({
@@ -175,6 +174,50 @@ export default function POSPage() {
         description: "Failed to process payment",
       });
     }
+  };
+
+  const handlePrintInvoice = async () => {
+    if (!currentInvoice) return;
+    
+    try {
+      await printInvoice(currentInvoice);
+      toast({
+        title: "Success",
+        description: "Invoice sent to printer",
+      });
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Failed to print invoice",
+      });
+    }
+  };
+
+  const handleEmailInvoice = async () => {
+    if (!currentInvoice) return;
+    
+    try {
+      // For now, we'll just use a dummy email
+      await emailInvoice(currentInvoice, "customer@example.com");
+      toast({
+        title: "Success",
+        description: "Invoice sent to email",
+      });
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Failed to email invoice",
+      });
+    }
+  };
+
+  const handleCloseInvoice = () => {
+    setShowInvoice(false);
+    setCurrentInvoice(null);
+    setCartItems([]);
+    setAdditionalDiscount(0);
   };
 
   const handlePrint = () => {
@@ -188,22 +231,45 @@ export default function POSPage() {
     setAdditionalDiscount(0);
   };
 
-  const handleSaveAsDraft = async () => {
+  const handleSaveDraft = () => {
     if (cartItems.length === 0) {
       toast({
         variant: "destructive",
         title: "Error",
-        description: "Cart is empty",
+        description: "Cannot save empty cart as draft",
       });
       return;
     }
 
-    // Mock saving as draft
+    const draft = {
+      customer: "Cash Customer",
+      customer_name: "Cash Customer",
+      items: cartItems,
+      total: cartItems.reduce((sum, item) => sum + item.amount, 0),
+      grand_total: cartItems.reduce((sum, item) => sum + item.amount, 0),
+      net_total: cartItems.reduce((sum, item) => sum + item.amount, 0),
+      status: "Draft",
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+
+    saveDraft(draft);
     toast({
       title: "Success",
-      description: "Invoice saved as draft",
+      description: "Draft saved successfully",
     });
     setCartItems([]);
+  };
+
+  const handleResumeDraft = (draftId: string) => {
+    const draft = resumeDraft(draftId);
+    if (draft) {
+      setCartItems(draft.items);
+      toast({
+        title: "Success",
+        description: "Draft loaded successfully",
+      });
+    }
   };
 
   const handleSync = async () => {
@@ -273,7 +339,7 @@ export default function POSPage() {
                 <Button
                   variant="ghost"
                   size="icon"
-                  onClick={() => setShowDraftOrders(true)}
+                  onClick={() => setShowDraftsDialog(true)}
                 >
                   <Save className="h-5 w-5" />
                 </Button>
@@ -288,28 +354,13 @@ export default function POSPage() {
                 <Button
                   variant="ghost"
                   size="icon"
-                  onClick={() => setShowRecentOrders(true)}
+                  onClick={() => setShowOrdersDialog(true)}
                 >
                   <ShoppingBag className="h-5 w-5" />
                 </Button>
               </TooltipTrigger>
               <TooltipContent>
-                <p>Recent Orders</p>
-              </TooltipContent>
-            </Tooltip>
-
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => setShowRecentOrders(true)}
-                >
-                  <History className="h-5 w-5" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>Order History</p>
+                <p>View Orders</p>
               </TooltipContent>
             </Tooltip>
 
@@ -328,6 +379,15 @@ export default function POSPage() {
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleSaveDraft}
+            className="gap-2"
+          >
+            <FileText className="h-4 w-4" />
+            Save Draft
+          </Button>
         </div>
       </div>
 
@@ -405,6 +465,17 @@ export default function POSPage() {
         </DialogContent>
       </Dialog>
 
+      {/* Invoice Dialog */}
+      {currentInvoice && (
+        <InvoiceDialog
+          invoice={currentInvoice}
+          open={showInvoice}
+          onClose={handleCloseInvoice}
+          onPrint={handlePrintInvoice}
+          onEmail={handleEmailInvoice}
+        />
+      )}
+
       {/* Sync Dialog */}
       <Dialog open={showSyncDialog} onOpenChange={setShowSyncDialog}>
         <DialogContent>
@@ -443,6 +514,49 @@ export default function POSPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Drafts Dialog */}
+      <Dialog open={showDraftsDialog} onOpenChange={setShowDraftsDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Saved Drafts</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            {drafts.length === 0 ? (
+              <p className="text-center text-muted-foreground">No drafts found</p>
+            ) : (
+              drafts.map((draft) => (
+                <div
+                  key={draft.name}
+                  className="flex items-center justify-between p-4 border rounded-lg"
+                >
+                  <div>
+                    <p className="font-medium">{draft.customer_name}</p>
+                    <p className="text-sm text-muted-foreground">
+                      {new Date(draft.created_at).toLocaleDateString()} • {draft.items.length} items
+                    </p>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleResumeDraft(draft.name)}
+                    >
+                      Resume
+                    </Button>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Orders Dialog */}
+      <OrdersDialog 
+        open={showOrdersDialog} 
+        onClose={() => setShowOrdersDialog(false)} 
+      />
     </div>
   );
 }

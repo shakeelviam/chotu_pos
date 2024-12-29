@@ -5,7 +5,26 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Icons } from "@/components/icons";
 import Link from "next/link";
-import { LogOut, Menu, ShoppingCart, RefreshCw, Minus, Square, X } from "lucide-react";
+import { 
+  LogOut, 
+  ShoppingCart, 
+  RefreshCw, 
+  Minus, 
+  Square, 
+  X,
+} from "lucide-react";
+
+interface WindowWithElectron extends Window {
+  electron?: {
+    minimize: () => void;
+    maximize: () => void;
+    close: () => void;
+    syncInventory: () => Promise<void>;
+    logout: () => Promise<void>;
+  };
+}
+
+declare const window: WindowWithElectron;
 
 export default function DashboardLayout({
   children,
@@ -18,7 +37,9 @@ export default function DashboardLayout({
   const handleSync = async () => {
     setIsSyncing(true);
     try {
-      await window.electron.syncInventory();
+      if (window.electron?.syncInventory) {
+        await window.electron.syncInventory();
+      }
     } catch (error) {
       console.error("Sync failed:", error);
     } finally {
@@ -27,8 +48,32 @@ export default function DashboardLayout({
   };
 
   const handleLogout = async () => {
-    await window.electron.logout();
-    router.push("/");
+    try {
+      if (window.electron?.logout) {
+        await window.electron.logout();
+        router.push("/");
+      }
+    } catch (error) {
+      console.error("Logout failed:", error);
+    }
+  };
+
+  const handleMinimize = () => {
+    if (window.electron?.minimize) {
+      window.electron.minimize();
+    }
+  };
+
+  const handleMaximize = () => {
+    if (window.electron?.maximize) {
+      window.electron.maximize();
+    }
+  };
+
+  const handleClose = () => {
+    if (window.electron?.close) {
+      window.electron.close();
+    }
   };
 
   return (
@@ -37,7 +82,6 @@ export default function DashboardLayout({
       <div className="h-10 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 border-b flex items-center justify-between draggable">
         {/* Left section */}
         <div className="flex items-center px-3 gap-2">
-          <Menu className="h-4 w-4" />
           <span className="text-sm font-medium">Chotu POS</span>
         </div>
 
@@ -74,22 +118,12 @@ export default function DashboardLayout({
             </Button>
           </Link>
 
-          {/* Logout */}
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-10 w-10 rounded-none hover:bg-accent"
-            onClick={handleLogout}
-          >
-            <LogOut className="h-4 w-4" />
-          </Button>
-
           {/* Window controls */}
           <Button
             variant="ghost"
             size="icon"
             className="h-10 w-10 rounded-none hover:bg-accent"
-            onClick={() => (window as any).electron?.minimize()}
+            onClick={handleMinimize}
           >
             <Minus className="h-4 w-4" />
           </Button>
@@ -98,18 +132,28 @@ export default function DashboardLayout({
             variant="ghost"
             size="icon"
             className="h-10 w-10 rounded-none hover:bg-accent"
-            onClick={() => (window as any).electron?.maximize()}
+            onClick={handleMaximize}
           >
-            <Square className="h-3.5 w-3.5" />
+            <Square className="h-4 w-4" />
           </Button>
 
           <Button
             variant="ghost"
             size="icon"
-            className="h-10 w-10 rounded-none hover:bg-destructive hover:text-destructive-foreground"
-            onClick={() => (window as any).electron?.close()}
+            className="h-10 w-10 rounded-none hover:bg-destructive"
+            onClick={handleClose}
           >
             <X className="h-4 w-4" />
+          </Button>
+
+          {/* Logout */}
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-10 w-10 rounded-none hover:bg-accent"
+            onClick={handleLogout}
+          >
+            <LogOut className="h-4 w-4" />
           </Button>
         </div>
       </div>
