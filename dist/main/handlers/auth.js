@@ -16,9 +16,9 @@ const TEST_CREDENTIALS = {
     role: 'manager'
 };
 const SUPER_ADMIN = {
-    username: 'superadmin',
-    password: 'superadmin123',
-    role: 'admin'
+    username: 'admin',
+    password: 'admin123',
+    role: 'super_admin'
 };
 function registerAuthHandlers() {
     let currentSession = null;
@@ -61,6 +61,20 @@ function registerAuthHandlers() {
             error: 'Invalid credentials'
         };
     });
+    electron_1.ipcMain.handle('auth:adminLogin', async (_, credentials) => {
+        console.log('Admin login attempt:', { username: credentials.username });
+        if (credentials.username === SUPER_ADMIN.username && credentials.password === SUPER_ADMIN.password) {
+            return {
+                success: true,
+                user: { username: SUPER_ADMIN.username, role: SUPER_ADMIN.role },
+                settings: MOCK_SETTINGS
+            };
+        }
+        return {
+            success: false,
+            error: 'Invalid admin credentials'
+        };
+    });
     electron_1.ipcMain.handle('auth:logout', async () => {
         if (!currentSession) {
             return { success: false, error: 'No active session' };
@@ -81,7 +95,28 @@ function registerAuthHandlers() {
         }
     });
     electron_1.ipcMain.handle('auth:getCurrentUser', async () => {
-        return currentSession ? { username: currentSession.user, role: 'manager' } : null;
+        try {
+            if (!currentSession) {
+                return {
+                    success: false,
+                    error: 'No active session'
+                };
+            }
+            return {
+                success: true,
+                user: {
+                    username: currentSession.user,
+                    role: currentSession.user === SUPER_ADMIN.username ? SUPER_ADMIN.role : TEST_CREDENTIALS.role
+                }
+            };
+        }
+        catch (error) {
+            console.error('Failed to get current user:', error);
+            return {
+                success: false,
+                error: error.message || 'Failed to get current user'
+            };
+        }
     });
     electron_1.ipcMain.handle('auth:getSettings', async () => {
         return { success: true, settings: MOCK_SETTINGS };

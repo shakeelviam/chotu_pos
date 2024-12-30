@@ -178,6 +178,8 @@ export interface ERPNextConfig {
   url: string;
   api_key: string;
   api_secret: string;
+  useMockData?: boolean;
+  syncInterval?: number;
 }
 
 export interface Settings {

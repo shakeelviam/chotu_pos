@@ -1,6 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.ERPNextService = void 0;
+exports.getERPNextService = getERPNextService;
 const axios_1 = require("axios");
 const config_1 = require("./config");
 class ERPNextService {
@@ -81,6 +82,22 @@ class ERPNextService {
             throw error;
         }
     }
+    async getPOSProfiles() {
+        try {
+            if (this.config.useMockData) {
+                return [
+                    { name: 'Retail POS', disabled: 0 },
+                    { name: 'Restaurant POS', disabled: 0 }
+                ];
+            }
+            const response = await this.axiosInstance.get('/api/resource/POS Profile');
+            return response.data.data;
+        }
+        catch (error) {
+            console.error('Failed to fetch POS profiles:', error);
+            throw error;
+        }
+    }
     getCurrentPOSProfile() {
         return this.posProfile;
     }
@@ -104,6 +121,19 @@ class ERPNextService {
             return {
                 success: false,
                 error: error.message || 'Failed to sync with ERPNext'
+            };
+        }
+    }
+    async testConnection() {
+        try {
+            const response = await this.axiosInstance.get('/api/method/frappe.auth.get_logged_user');
+            return { success: true };
+        }
+        catch (error) {
+            console.error('Connection test failed:', error);
+            return {
+                success: false,
+                error: error.response?.data?.message || 'Connection test failed'
             };
         }
     }
@@ -150,4 +180,7 @@ class ERPNextService {
     }
 }
 exports.ERPNextService = ERPNextService;
+function getERPNextService() {
+    return ERPNextService.initialize();
+}
 //# sourceMappingURL=erpnext.js.map

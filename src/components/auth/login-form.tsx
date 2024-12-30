@@ -21,7 +21,7 @@ export function LoginForm() {
     setIsLoading(true);
 
     try {
-      const result = await window.electron.login(username, password);
+      const result = await window.electron.login({ username, password });
       if (result.success) {
         toast({
           title: "Success",
@@ -90,6 +90,17 @@ export function LoginForm() {
             )}
             Sign In
           </Button>
+          <div className="text-sm text-center mt-4">
+            <Button
+              variant="link"
+              className="text-muted-foreground hover:text-primary"
+              onClick={() => router.push("/admin/settings")}
+              disabled={isLoading}
+            >
+              <Icons.settings className="mr-2 h-4 w-4" />
+              Admin Settings
+            </Button>
+          </div>
         </div>
       </form>
     </div>

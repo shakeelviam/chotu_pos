@@ -2,30 +2,36 @@ console.log('MAIN PROCESS STARTING - ' + new Date().toISOString());
 
 import { app, BrowserWindow, ipcMain } from 'electron';
 import * as path from 'path';
-import { registerAuthHandlers } from './handlers/auth';
-import { registerCustomerHandlers } from './handlers/customers';
-import { registerItemHandlers } from './handlers/items';
-import { registerSalesHandlers } from './handlers/sales';
-import { registerSyncHandlers } from './handlers/sync';
-import { registerPOSOpeningHandlers } from './handlers/pos-opening';
-import { initDatabase } from './database';
+import { initDatabase, getDatabase } from './database';
+import { Config } from './services/config';
+import { registerAllHandlers } from './handlers/register-handlers';
 
-// Disable GPU acceleration and hardware acceleration
-app.disableHardwareAcceleration();
-app.commandLine.appendSwitch('disable-gpu');
-app.commandLine.appendSwitch('disable-software-rasterizer');
-
-// Disable various GPU features that might cause warnings
-app.commandLine.appendSwitch('disable-gpu-compositing');
-app.commandLine.appendSwitch('disable-gpu-rasterization');
-app.commandLine.appendSwitch('disable-gpu-sandbox');
-app.commandLine.appendSwitch('use-gl', 'desktop');
-app.commandLine.appendSwitch('enable-features', 'VaapiVideoDecoder');
-
-// Environment variables for suppressing warnings
+// Set environment variables before anything else
 process.env.ELECTRON_DISABLE_SECURITY_WARNINGS = 'true';
 process.env.ELECTRON_NO_ATTACH_CONSOLE = 'true';
 process.env.MESA_DEBUG = 'silent';
+process.env.MESA_GLSL_CACHE_DISABLE = 'true';
+process.env.LIBGL_DRI3_DISABLE = '1';
+process.env.MESA_NO_ERROR = '1';
+process.env.MESA_LOADER_DRIVER_OVERRIDE = 'i965';
+process.env.LIBGL_ALWAYS_SOFTWARE = '1';  // Force software rendering
+process.env.ELECTRON_DISABLE_GPU = '1';   // Disable GPU at process level
+
+// Disable all GPU features that might cause warnings
+app.disableHardwareAcceleration();
+app.commandLine.appendSwitch('disable-gpu');
+app.commandLine.appendSwitch('disable-gpu-compositing');
+app.commandLine.appendSwitch('disable-gpu-rasterization');
+app.commandLine.appendSwitch('disable-gpu-sandbox');
+app.commandLine.appendSwitch('disable-software-rasterizer');
+app.commandLine.appendSwitch('use-gl', 'swiftshader');  // Use software rendering
+app.commandLine.appendSwitch('enable-features', 'VaapiVideoDecoder');
+app.commandLine.appendSwitch('ignore-gpu-blocklist');
+app.commandLine.appendSwitch('disable-vulkan');
+app.commandLine.appendSwitch('no-sandbox');
+app.commandLine.appendSwitch('disable-dev-shm-usage');
+app.commandLine.appendSwitch('disable-gpu-memory-buffer-compositor');  // Disable GPU memory buffers
+app.commandLine.appendSwitch('disable-accelerated-2d-canvas');  // Disable accelerated 2D canvas
 
 // Suppress all GPU-related warnings
 const originalConsoleWarn = console.warn;
@@ -39,7 +45,8 @@ console.warn = (...args) => {
       message.includes('CreateInstance') ||
       message.includes('terminator') ||
       message.includes('gl_') ||
-      message.includes('[WARNING:')) {
+      message.includes('[WARNING:') ||
+      message.includes('ICD')) {
     return;
   }
   originalConsoleWarn.apply(console, args);
@@ -53,7 +60,8 @@ console.error = (...args) => {
       message.includes('CreateInstance') ||
       message.includes('terminator') ||
       message.includes('gl_') ||
-      message.includes('[WARNING:')) {
+      message.includes('[WARNING:') ||
+      message.includes('ICD')) {
     return;
   }
   originalConsoleError.apply(console, args);
@@ -63,7 +71,8 @@ console.error = (...args) => {
 process.on('uncaughtException', (error) => {
   if (!error.message?.includes('GPU') && 
       !error.message?.includes('Vulkan') && 
-      !error.message?.includes('MESA')) {
+      !error.message?.includes('MESA') &&
+      !error.message?.includes('ICD')) {
     console.error('Uncaught exception:', error);
   }
 });
@@ -71,7 +80,8 @@ process.on('uncaughtException', (error) => {
 process.on('unhandledRejection', (error) => {
   if (!error?.toString().includes('GPU') && 
       !error?.toString().includes('Vulkan') && 
-      !error?.toString().includes('MESA')) {
+      !error?.toString().includes('MESA') &&
+      !error?.toString().includes('ICD')) {
     console.error('Unhandled rejection:', error);
   }
 });
@@ -81,11 +91,35 @@ console.log('Starting application...');
 // Keep a global reference of the window object to prevent garbage collection
 let mainWindow: BrowserWindow | null = null;
 
-// Mock data for testing
-const MOCK_ITEMS = [{ item_code: 'TEST1', item_name: 'Test Item', description: 'Test Description', standard_rate: 10, current_stock: 100, barcode: '123' }];
-const DEFAULT_CUSTOMER = { id: 1, name: 'Walk-in Customer', mobile: '0000000000' };
+// Initialize config
+const config = Config.getInstance();
+
+// Initialize database
+console.log('Initializing database...');
+initDatabase();
+const db = getDatabase();
 
 console.log('Registering IPC handlers...');
+registerAllHandlers(db, config);
+
+// This method will be called when Electron has finished initialization
+app.whenReady().then(async () => {
+  // Set application name
+  app.name = 'Chotu POS';
+  
+  console.log('Starting application...');
+  
+  console.log('App is ready, creating window...');
+  await createWindow();
+
+  app.on('activate', async function () {
+    // On macOS it's common to re-create a window in the app when the
+    // dock icon is clicked and there are no other windows open.
+    if (BrowserWindow.getAllWindows().length === 0) {
+      await createWindow();
+    }
+  });
+});
 
 async function createWindow() {
   console.log('Creating window...');
@@ -105,17 +139,6 @@ async function createWindow() {
     }
   });
 
-  // Initialize database
-  await initDatabase();
-
-  // Register all handlers
-  registerAuthHandlers();
-  registerCustomerHandlers();
-  registerItemHandlers();
-  registerSalesHandlers();
-  registerSyncHandlers();
-  registerPOSOpeningHandlers();
-
   // Register window control handlers
   ipcMain.handle('window:minimize', () => {
     mainWindow?.minimize();
@@ -134,6 +157,18 @@ async function createWindow() {
   });
 
   if (process.env.NODE_ENV === 'development') {
+    // Wait for preload script to be ready
+    await new Promise<void>((resolve) => {
+      const checkPreload = () => {
+        if (mainWindow?.webContents && mainWindow?.webContents.session) {
+          resolve();
+        } else {
+          setTimeout(checkPreload, 100);
+        }
+      };
+      checkPreload();
+    });
+    
     await mainWindow.loadURL('http://localhost:3006');
     mainWindow.webContents.openDevTools();
   } else {
@@ -158,23 +193,6 @@ async function createWindow() {
     mainWindow = null;
   });
 }
-
-// This method will be called when Electron has finished initialization
-app.whenReady().then(async () => {
-  // Set application name
-  app.name = 'Chotu POS';
-  
-  console.log('App is ready, creating window...');
-  await createWindow();
-
-  app.on('activate', async function () {
-    // On macOS it's common to re-create a window in the app when the
-    // dock icon is clicked and there are no other windows open.
-    if (BrowserWindow.getAllWindows().length === 0) {
-      await createWindow();
-    }
-  });
-});
 
 app.on('window-all-closed', function () {
   // On macOS it is common for applications and their menu bar

@@ -3,24 +3,32 @@ Object.defineProperty(exports, "__esModule", { value: true });
 console.log('MAIN PROCESS STARTING - ' + new Date().toISOString());
 const electron_1 = require("electron");
 const path = require("path");
-const auth_1 = require("./handlers/auth");
-const customers_1 = require("./handlers/customers");
-const items_1 = require("./handlers/items");
-const sales_1 = require("./handlers/sales");
-const sync_1 = require("./handlers/sync");
-const pos_opening_1 = require("./handlers/pos-opening");
 const database_1 = require("./database");
-electron_1.app.disableHardwareAcceleration();
-electron_1.app.commandLine.appendSwitch('disable-gpu');
-electron_1.app.commandLine.appendSwitch('disable-software-rasterizer');
-electron_1.app.commandLine.appendSwitch('disable-gpu-compositing');
-electron_1.app.commandLine.appendSwitch('disable-gpu-rasterization');
-electron_1.app.commandLine.appendSwitch('disable-gpu-sandbox');
-electron_1.app.commandLine.appendSwitch('use-gl', 'desktop');
-electron_1.app.commandLine.appendSwitch('enable-features', 'VaapiVideoDecoder');
+const config_1 = require("./services/config");
+const register_handlers_1 = require("./handlers/register-handlers");
 process.env.ELECTRON_DISABLE_SECURITY_WARNINGS = 'true';
 process.env.ELECTRON_NO_ATTACH_CONSOLE = 'true';
 process.env.MESA_DEBUG = 'silent';
+process.env.MESA_GLSL_CACHE_DISABLE = 'true';
+process.env.LIBGL_DRI3_DISABLE = '1';
+process.env.MESA_NO_ERROR = '1';
+process.env.MESA_LOADER_DRIVER_OVERRIDE = 'i965';
+process.env.LIBGL_ALWAYS_SOFTWARE = '1';
+process.env.ELECTRON_DISABLE_GPU = '1';
+electron_1.app.disableHardwareAcceleration();
+electron_1.app.commandLine.appendSwitch('disable-gpu');
+electron_1.app.commandLine.appendSwitch('disable-gpu-compositing');
+electron_1.app.commandLine.appendSwitch('disable-gpu-rasterization');
+electron_1.app.commandLine.appendSwitch('disable-gpu-sandbox');
+electron_1.app.commandLine.appendSwitch('disable-software-rasterizer');
+electron_1.app.commandLine.appendSwitch('use-gl', 'swiftshader');
+electron_1.app.commandLine.appendSwitch('enable-features', 'VaapiVideoDecoder');
+electron_1.app.commandLine.appendSwitch('ignore-gpu-blocklist');
+electron_1.app.commandLine.appendSwitch('disable-vulkan');
+electron_1.app.commandLine.appendSwitch('no-sandbox');
+electron_1.app.commandLine.appendSwitch('disable-dev-shm-usage');
+electron_1.app.commandLine.appendSwitch('disable-gpu-memory-buffer-compositor');
+electron_1.app.commandLine.appendSwitch('disable-accelerated-2d-canvas');
 const originalConsoleWarn = console.warn;
 const originalConsoleError = console.error;
 console.warn = (...args) => {
@@ -31,7 +39,8 @@ console.warn = (...args) => {
         message.includes('CreateInstance') ||
         message.includes('terminator') ||
         message.includes('gl_') ||
-        message.includes('[WARNING:')) {
+        message.includes('[WARNING:') ||
+        message.includes('ICD')) {
         return;
     }
     originalConsoleWarn.apply(console, args);
@@ -44,7 +53,8 @@ console.error = (...args) => {
         message.includes('CreateInstance') ||
         message.includes('terminator') ||
         message.includes('gl_') ||
-        message.includes('[WARNING:')) {
+        message.includes('[WARNING:') ||
+        message.includes('ICD')) {
         return;
     }
     originalConsoleError.apply(console, args);
@@ -52,22 +62,38 @@ console.error = (...args) => {
 process.on('uncaughtException', (error) => {
     if (!error.message?.includes('GPU') &&
         !error.message?.includes('Vulkan') &&
-        !error.message?.includes('MESA')) {
+        !error.message?.includes('MESA') &&
+        !error.message?.includes('ICD')) {
         console.error('Uncaught exception:', error);
     }
 });
 process.on('unhandledRejection', (error) => {
     if (!error?.toString().includes('GPU') &&
         !error?.toString().includes('Vulkan') &&
-        !error?.toString().includes('MESA')) {
+        !error?.toString().includes('MESA') &&
+        !error?.toString().includes('ICD')) {
         console.error('Unhandled rejection:', error);
     }
 });
 console.log('Starting application...');
 let mainWindow = null;
-const MOCK_ITEMS = [{ item_code: 'TEST1', item_name: 'Test Item', description: 'Test Description', standard_rate: 10, current_stock: 100, barcode: '123' }];
-const DEFAULT_CUSTOMER = { id: 1, name: 'Walk-in Customer', mobile: '0000000000' };
+const config = config_1.Config.getInstance();
+console.log('Initializing database...');
+(0, database_1.initDatabase)();
+const db = (0, database_1.getDatabase)();
 console.log('Registering IPC handlers...');
+(0, register_handlers_1.registerAllHandlers)(db, config);
+electron_1.app.whenReady().then(async () => {
+    electron_1.app.name = 'Chotu POS';
+    console.log('Starting application...');
+    console.log('App is ready, creating window...');
+    await createWindow();
+    electron_1.app.on('activate', async function () {
+        if (electron_1.BrowserWindow.getAllWindows().length === 0) {
+            await createWindow();
+        }
+    });
+});
 async function createWindow() {
     console.log('Creating window...');
     mainWindow = new electron_1.BrowserWindow({
@@ -83,13 +109,6 @@ async function createWindow() {
             offscreen: false
         }
     });
-    await (0, database_1.initDatabase)();
-    (0, auth_1.registerAuthHandlers)();
-    (0, customers_1.registerCustomerHandlers)();
-    (0, items_1.registerItemHandlers)();
-    (0, sales_1.registerSalesHandlers)();
-    (0, sync_1.registerSyncHandlers)();
-    (0, pos_opening_1.registerPOSOpeningHandlers)();
     electron_1.ipcMain.handle('window:minimize', () => {
         mainWindow?.minimize();
     });
@@ -105,6 +124,17 @@ async function createWindow() {
         mainWindow?.close();
     });
     if (process.env.NODE_ENV === 'development') {
+        await new Promise((resolve) => {
+            const checkPreload = () => {
+                if (mainWindow?.webContents && mainWindow?.webContents.session) {
+                    resolve();
+                }
+                else {
+                    setTimeout(checkPreload, 100);
+                }
+            };
+            checkPreload();
+        });
         await mainWindow.loadURL('http://localhost:3006');
         mainWindow.webContents.openDevTools();
     }
@@ -124,16 +154,6 @@ async function createWindow() {
         mainWindow = null;
     });
 }
-electron_1.app.whenReady().then(async () => {
-    electron_1.app.name = 'Chotu POS';
-    console.log('App is ready, creating window...');
-    await createWindow();
-    electron_1.app.on('activate', async function () {
-        if (electron_1.BrowserWindow.getAllWindows().length === 0) {
-            await createWindow();
-        }
-    });
-});
 electron_1.app.on('window-all-closed', function () {
     if (process.platform !== 'darwin') {
         electron_1.app.quit();

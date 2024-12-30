@@ -19,9 +19,9 @@ const TEST_CREDENTIALS = {
 };
 
 const SUPER_ADMIN = {
-  username: 'superadmin',
-  password: 'superadmin123',
-  role: 'admin' as UserRole
+  username: 'admin',
+  password: 'admin123',
+  role: 'super_admin' as UserRole
 };
 
 export function registerAuthHandlers() {
@@ -81,6 +81,24 @@ export function registerAuthHandlers() {
     };
   });
 
+  // Admin login handler
+  ipcMain.handle('auth:adminLogin', async (_, credentials: { username: string; password: string }): Promise<AuthResponse> => {
+    console.log('Admin login attempt:', { username: credentials.username });
+
+    if (credentials.username === SUPER_ADMIN.username && credentials.password === SUPER_ADMIN.password) {
+      return {
+        success: true,
+        user: { username: SUPER_ADMIN.username, role: SUPER_ADMIN.role },
+        settings: MOCK_SETTINGS
+      };
+    }
+
+    return {
+      success: false,
+      error: 'Invalid admin credentials'
+    };
+  });
+
   // Logout handler
   ipcMain.handle('auth:logout', async () => {
     if (!currentSession) {
@@ -104,8 +122,30 @@ export function registerAuthHandlers() {
   });
 
   // Get current user
-  ipcMain.handle('auth:getCurrentUser', async () => {
-    return currentSession ? { username: currentSession.user, role: 'manager' } : null;
+  ipcMain.handle('auth:getCurrentUser', async (): Promise<AuthResponse> => {
+    try {
+      // For now, just return the current session's user
+      if (!currentSession) {
+        return {
+          success: false,
+          error: 'No active session'
+        };
+      }
+
+      return {
+        success: true,
+        user: {
+          username: currentSession.user,
+          role: currentSession.user === SUPER_ADMIN.username ? SUPER_ADMIN.role : TEST_CREDENTIALS.role
+        }
+      };
+    } catch (error) {
+      console.error('Failed to get current user:', error);
+      return {
+        success: false,
+        error: error.message || 'Failed to get current user'
+      };
+    }
   });
 
   // Get settings

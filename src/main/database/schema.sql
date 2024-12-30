@@ -67,3 +67,50 @@ CREATE TABLE IF NOT EXISTS opening_balance (
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (session_id) REFERENCES sessions (id)
 );
+
+-- Create role_configs table
+CREATE TABLE IF NOT EXISTS role_configs (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  role TEXT NOT NULL UNIQUE,
+  pos_profile TEXT NOT NULL,
+  max_discount_percent REAL NOT NULL DEFAULT 0,
+  max_discount_amount REAL NOT NULL DEFAULT 0,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Create system_logs table
+CREATE TABLE IF NOT EXISTS system_logs (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  level TEXT NOT NULL,
+  message TEXT NOT NULL,
+  details TEXT,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Create system_config table
+CREATE TABLE IF NOT EXISTS system_config (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  offline_mode_enabled BOOLEAN DEFAULT FALSE,
+  offline_max_storage INTEGER DEFAULT 1000,
+  offline_sync_priority TEXT DEFAULT '[]',
+  backup_enabled BOOLEAN DEFAULT FALSE,
+  backup_frequency INTEGER DEFAULT 24,
+  backup_retention_days INTEGER DEFAULT 7,
+  debug_enabled BOOLEAN DEFAULT FALSE,
+  debug_log_level TEXT DEFAULT 'info',
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Create erpnext_config table
+CREATE TABLE IF NOT EXISTS erpnext_config (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  url TEXT NOT NULL,
+  api_key TEXT NOT NULL,
+  api_secret TEXT NOT NULL,
+  use_mock_data BOOLEAN DEFAULT FALSE,
+  sync_interval INTEGER DEFAULT 30,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);

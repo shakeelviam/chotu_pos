@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/components/ui/use-toast";
 
-export default function Home() {
+export default function AdminLogin() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -30,18 +30,18 @@ export default function Home() {
 
     setIsLoading(true);
     try {
-      const response = await window.electron.login({ 
+      const response = await window.electron.adminLogin({ 
         username: username.trim(), 
         password: password.trim() 
       });
 
       if (response.success) {
-        router.push("/pos");
+        router.push("/admin/settings");
       } else {
         toast({
           variant: "destructive",
           title: "Error",
-          description: response.message || "Invalid credentials",
+          description: response.error || "Invalid admin credentials",
         });
       }
     } catch (error: any) {
@@ -59,8 +59,8 @@ export default function Home() {
     <main className="flex min-h-screen flex-col items-center justify-center p-4 bg-gradient-to-b from-blue-50 to-blue-100">
       <Card className="w-full max-w-md p-6 space-y-6 bg-white/90 backdrop-blur shadow-xl rounded-xl">
         <div className="space-y-2 text-center">
-          <h1 className="text-3xl font-bold">Welcome Back</h1>
-          <p className="text-gray-500">Enter your credentials to continue</p>
+          <h1 className="text-3xl font-bold">Admin Login</h1>
+          <p className="text-gray-500">Enter your admin credentials</p>
         </div>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
@@ -94,10 +94,10 @@ export default function Home() {
         </form>
         <div className="text-center text-sm">
           <Link 
-            href="/admin/login" 
+            href="/" 
             className="text-blue-600 hover:text-blue-800 transition-colors"
           >
-            Admin Login →
+            ← Back to POS Login
           </Link>
         </div>
       </Card>

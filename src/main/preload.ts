@@ -14,43 +14,57 @@ contextBridge.exposeInMainWorld(
     close: () => ipcRenderer.invoke('window:close'),
 
     // Auth
-    login: (credentials: { username: string; password: string }): Promise<AuthResponse> => 
+    login: async (credentials: { username: string; password: string }): Promise<AuthResponse> => 
       ipcRenderer.invoke('auth:login', credentials),
-    logout: () => ipcRenderer.invoke('auth:logout'),
-    getSettings: () => ipcRenderer.invoke('auth:getSettings'),
-    getCurrentUser: () => ipcRenderer.invoke('auth:getCurrentUser'),
+    adminLogin: async (credentials: { username: string; password: string }): Promise<AuthResponse> => 
+      ipcRenderer.invoke('auth:adminLogin', credentials),
+    logout: async () => ipcRenderer.invoke('auth:logout'),
+    getSettings: async () => ipcRenderer.invoke('auth:getSettings'),
+    getCurrentUser: async () => ipcRenderer.invoke('auth:getCurrentUser'),
 
     // Items
-    getItems: () => ipcRenderer.invoke('items:getAll'),
-    searchItems: (query: string) => ipcRenderer.invoke('items:search', query),
-    getItem: (itemCode: string) => ipcRenderer.invoke('items:get', itemCode),
-    updateItem: (itemCode: string, updates: any) => ipcRenderer.invoke('items:update', itemCode, updates),
+    getItems: async () => ipcRenderer.invoke('items:getAll'),
+    searchItems: async (query: string) => ipcRenderer.invoke('items:search', query),
+    getItem: async (itemCode: string) => ipcRenderer.invoke('items:get', itemCode),
+    updateItem: async (itemCode: string, updates: any) => ipcRenderer.invoke('items:update', itemCode, updates),
 
     // Sales
-    createSale: (sale: any) => ipcRenderer.invoke('sales:create', sale),
-    getSales: () => ipcRenderer.invoke('sales:getAll'),
-    getSale: (id: string) => ipcRenderer.invoke('sales:get', id),
+    createSale: async (sale: any) => ipcRenderer.invoke('sales:create', sale),
+    getSales: async () => ipcRenderer.invoke('sales:getAll'),
+    getSale: async (id: string) => ipcRenderer.invoke('sales:get', id),
 
     // Customers
-    getCustomers: () => ipcRenderer.invoke('customers:getAll'),
-    searchCustomers: (query: string) => ipcRenderer.invoke('customers:search', query),
-    createCustomer: (customer: any) => ipcRenderer.invoke('customers:create', customer),
+    getCustomers: async () => ipcRenderer.invoke('customers:getAll'),
+    searchCustomers: async (query: string) => ipcRenderer.invoke('customers:search', query),
+    createCustomer: async (customer: any) => ipcRenderer.invoke('customers:create', customer),
 
     // POS Session
-    getCurrentSession: () => ipcRenderer.invoke('pos:getCurrentSession'),
-    openSession: () => ipcRenderer.invoke('pos:openSession'),
-    closeSession: () => ipcRenderer.invoke('pos:closeSession'),
-    createPOSOpening: (data: { cashAmount: number; knetAmount: number; profile: string }) => 
+    getCurrentSession: async () => ipcRenderer.invoke('pos:getCurrentSession'),
+    openSession: async () => ipcRenderer.invoke('pos:openSession'),
+    closeSession: async () => ipcRenderer.invoke('pos:closeSession'),
+    createPOSOpening: async (data: { cashAmount: number; knetAmount: number; profile: string }) => 
       ipcRenderer.invoke('pos:createOpening', data),
-    endSession: () => ipcRenderer.invoke('pos:endSession'),
-    getSessions: () => ipcRenderer.invoke('pos:getSessions'),
-    getSessionById: (id: number) => ipcRenderer.invoke('pos:getSessionById', id),
+    endSession: async () => ipcRenderer.invoke('pos:endSession'),
+    getSessions: async () => ipcRenderer.invoke('pos:getSessions'),
+    getSessionById: async (id: number) => ipcRenderer.invoke('pos:getSessionById', id),
 
     // Sync
-    syncItems: () => ipcRenderer.invoke('sync:items'),
-    syncCustomers: () => ipcRenderer.invoke('sync:customers'),
-    syncAll: () => ipcRenderer.invoke('sync:all'),
-    getSyncStatus: () => ipcRenderer.invoke('sync:status')
+    syncItems: async () => ipcRenderer.invoke('sync:items'),
+    syncAll: async () => ipcRenderer.invoke('sync:all'),
+    getSyncStatus: async () => ipcRenderer.invoke('sync:status'),
+
+    // Admin
+    testERPNextConnection: async (config: any) => ipcRenderer.invoke('admin:test-connection', config),
+    getERPNextConfig: async () => ipcRenderer.invoke('admin:get-erpnext-config'),
+    saveERPNextConfig: async (config: any) => ipcRenderer.invoke('admin:save-erpnext-config', config),
+    getPOSProfiles: async () => ipcRenderer.invoke('admin:get-pos-profiles'),
+    getRoleConfigs: async () => ipcRenderer.invoke('admin:get-role-configs'),
+    saveRoleConfig: async (config: any) => ipcRenderer.invoke('admin:save-role-config', config),
+    deleteRoleConfig: async (role: string) => ipcRenderer.invoke('admin:delete-role-config', role),
+    getSystemConfig: async () => ipcRenderer.invoke('admin:get-system-config'),
+    saveSystemConfig: async (config: any) => ipcRenderer.invoke('admin:save-system-config', config),
+    getSystemLogs: async (filters?: { level?: string }) => ipcRenderer.invoke('admin:get-system-logs', filters),
+    clearSystemLogs: async () => ipcRenderer.invoke('admin:clear-system-logs')
   }
 );
 

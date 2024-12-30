@@ -1,54 +1,32 @@
 import { AuthResponse } from ".";
 
 export interface IElectronAPI {
-  login: (credentials: { username: string; password: string }) => Promise<AuthResponse>;
-  getItems: () => Promise<any[]>;
-  searchItems: (query: string) => Promise<any[]>;
-  createSale: (sale: any) => Promise<any>;
-  logout: () => Promise<void>;
+  // Window controls
   minimize: () => Promise<void>;
   maximize: () => Promise<void>;
   close: () => Promise<void>;
-}
 
-interface ElectronAPI {
   // Auth
   login: (credentials: { username: string; password: string }) => Promise<AuthResponse>;
-  logout: () => Promise<{
-    success: boolean;
-    error?: string;
-  }>;
-  verifyManager: (credentials: { username: string; password: string }) => Promise<{
-    success: boolean;
-    error?: string;
-  }>;
-  getCurrentUser: () => Promise<{
-    username: string;
-    role: string;
-  } | null>;
+  adminLogin: (credentials: { username: string; password: string }) => Promise<AuthResponse>;
+  logout: () => Promise<{ success: boolean; error?: string }>;
+  getSettings: () => Promise<{ success: boolean; settings?: any; error?: string }>;
+  getCurrentUser: () => Promise<{ success: boolean; user?: { username: string; role: string } }>;
+  verifyManager: (credentials: { username: string; password: string }) => Promise<{ success: boolean; error?: string }>;
 
-  // Config & Admin
-  getERPNextConfig: () => Promise<{
-    success: boolean;
-    config?: {
-      url: string;
-      api_key: string;
-      api_secret: string;
-    };
-    error?: string;
-  }>;
-  saveERPNextConfig: (config: {
-    url: string;
-    api_key: string;
-    api_secret: string;
-  }) => Promise<{
-    success: boolean;
-    error?: string;
-  }>;
-  syncAll: () => Promise<{
-    success: boolean;
-    error?: string;
-  }>;
+  // Admin
+  getERPNextConfig: () => Promise<{ success: boolean; config?: any; error?: string }>;
+  saveERPNextConfig: (config: any) => Promise<{ success: boolean; error?: string }>;
+  testERPNextConnection: (config: any) => Promise<{ success: boolean; error?: string }>;
+  getRoleConfigs: () => Promise<{ success: boolean; configs?: any[]; error?: string }>;
+  saveRoleConfig: (config: any) => Promise<{ success: boolean; error?: string }>;
+  deleteRoleConfig: (role: string) => Promise<{ success: boolean; error?: string }>;
+  getSystemConfig: () => Promise<{ success: boolean; config?: any; error?: string }>;
+  saveSystemConfig: (config: any) => Promise<{ success: boolean; error?: string }>;
+  getSystemLogs: (filters?: { level?: string }) => Promise<{ success: boolean; logs?: any[]; error?: string }>;
+  clearSystemLogs: () => Promise<{ success: boolean; error?: string }>;
+  exportSystemLogs: () => Promise<{ success: boolean; filePath?: string; error?: string }>;
+  getPOSProfiles: () => Promise<{ success: boolean; profiles?: any[]; error?: string }>;
 
   // Items
   getItems: () => Promise<{
@@ -72,43 +50,100 @@ interface ElectronAPI {
       barcode: string | null;
       standard_rate: number;
       image_url: string | null;
-      current_stock: number;
-      last_sync: string;
     }>;
     error?: string;
   }>;
-  syncInventory: () => Promise<{
+  getItem: (itemCode: string) => Promise<{
     success: boolean;
-    message?: string;
+    item?: any;
+    error?: string;
+  }>;
+  updateItem: (itemCode: string, updates: any) => Promise<{
+    success: boolean;
     error?: string;
   }>;
 
   // Sales
-  createSale: (saleData: {
-    total_amount: number;
-    payment_method: string;
-    customer_name: string;
-    items: Array<{
-      item_code: string;
-      quantity: number;
-      rate: number;
-      amount: number;
-    }>;
-  }) => Promise<{
+  createSale: (sale: any) => Promise<{
     success: boolean;
-    sale_id?: number;
+    sale?: any;
     error?: string;
   }>;
-  syncSales: () => Promise<{
+  getSales: () => Promise<{
     success: boolean;
-    message?: string;
+    sales?: any[];
+    error?: string;
+  }>;
+  getSale: (id: string) => Promise<{
+    success: boolean;
+    sale?: any;
     error?: string;
   }>;
 
-  // Settings
-  getSettings: () => Promise<{
+  // Customers
+  getCustomers: () => Promise<{
     success: boolean;
-    settings?: any;
+    customers?: any[];
+    error?: string;
+  }>;
+  searchCustomers: (query: string) => Promise<{
+    success: boolean;
+    customers?: any[];
+    error?: string;
+  }>;
+  createCustomer: (customer: any) => Promise<{
+    success: boolean;
+    customer?: any;
+    error?: string;
+  }>;
+
+  // POS Session
+  getCurrentSession: () => Promise<{
+    success: boolean;
+    session?: any;
+    error?: string;
+  }>;
+  openSession: () => Promise<{
+    success: boolean;
+    session?: any;
+    error?: string;
+  }>;
+  closeSession: () => Promise<{
+    success: boolean;
+    error?: string;
+  }>;
+  createPOSOpening: (data: { cashAmount: number; knetAmount: number; profile: string }) => Promise<{
+    success: boolean;
+    opening?: any;
+    error?: string;
+  }>;
+  endSession: () => Promise<{
+    success: boolean;
+    error?: string;
+  }>;
+  getSessions: () => Promise<{
+    success: boolean;
+    sessions?: any[];
+    error?: string;
+  }>;
+  getSessionById: (id: number) => Promise<{
+    success: boolean;
+    session?: any;
+    error?: string;
+  }>;
+
+  // Sync
+  syncItems: () => Promise<{
+    success: boolean;
+    error?: string;
+  }>;
+  syncAll: () => Promise<{
+    success: boolean;
+    error?: string;
+  }>;
+  getSyncStatus: () => Promise<{
+    success: boolean;
+    status?: any;
     error?: string;
   }>;
 }

@@ -8,7 +8,7 @@ export class ERPNextService {
   private posProfile: POSProfile | null = null;
   private config: ERPNextConfig;
 
-  private constructor(config: ERPNextConfig) {
+  constructor(config: ERPNextConfig) {
     this.config = config;
     this.axiosInstance = axios.create({
       baseURL: config.url,
@@ -94,6 +94,23 @@ export class ERPNextService {
     }
   }
 
+  async getPOSProfiles(): Promise<any[]> {
+    try {
+      if (this.config.useMockData) {
+        return [
+          { name: 'Retail POS', disabled: 0 },
+          { name: 'Restaurant POS', disabled: 0 }
+        ];
+      }
+
+      const response = await this.axiosInstance.get('/api/resource/POS Profile');
+      return response.data.data;
+    } catch (error) {
+      console.error('Failed to fetch POS profiles:', error);
+      throw error;
+    }
+  }
+
   getCurrentPOSProfile(): POSProfile | null {
     return this.posProfile;
   }
@@ -130,6 +147,19 @@ export class ERPNextService {
       return {
         success: false,
         error: error.message || 'Failed to sync with ERPNext'
+      };
+    }
+  }
+
+  async testConnection(): Promise<{ success: boolean; error?: string }> {
+    try {
+      const response = await this.axiosInstance.get('/api/method/frappe.auth.get_logged_user');
+      return { success: true };
+    } catch (error: any) {
+      console.error('Connection test failed:', error);
+      return { 
+        success: false, 
+        error: error.response?.data?.message || 'Connection test failed' 
       };
     }
   }
@@ -179,4 +209,9 @@ export class ERPNextService {
     });
     return response.data.message || [];
   }
+}
+
+// Export a function to get the ERPNext service instance
+export function getERPNextService(): Promise<ERPNextService> {
+  return ERPNextService.initialize();
 }

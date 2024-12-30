@@ -107,6 +107,7 @@ export function initDatabase() {
   })();
 
   console.log('Database initialized successfully');
+  return db;
 }
 
 export function closeDatabase() {

@@ -90,6 +90,7 @@ function initDatabase() {
     `).run();
     })();
     console.log('Database initialized successfully');
+    return db;
 }
 function closeDatabase() {
     if (db) {
