@@ -9,7 +9,7 @@ export class Database {
   private constructor() {
     const dbPath = path.join(app.getPath('userData'), 'pos.db');
     console.log('Initializing database at:', dbPath);
-    
+
     this.db = new BetterSqlite3(dbPath);
     this.init();
   }

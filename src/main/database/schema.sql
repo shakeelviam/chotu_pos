@@ -114,3 +114,57 @@ CREATE TABLE IF NOT EXISTS erpnext_config (
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
+
+-- Add these to your schema.sql
+
+-- Create sync_queue table
+CREATE TABLE IF NOT EXISTS sync_queue (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  entity_type TEXT NOT NULL,  -- 'sale', 'customer', 'item'
+  entity_id INTEGER NOT NULL,
+  action TEXT NOT NULL,       -- 'create', 'update', 'delete'
+  priority INTEGER DEFAULT 0,
+  attempts INTEGER DEFAULT 0,
+  last_attempt DATETIME,
+  error_message TEXT,
+  status TEXT DEFAULT 'pending',
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Create sync_status table
+CREATE TABLE IF NOT EXISTS sync_status (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  entity_type TEXT NOT NULL UNIQUE,
+  last_sync_time DATETIME,
+  last_sync_status TEXT,
+  error_message TEXT,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Create sync_conflicts table
+CREATE TABLE IF NOT EXISTS sync_conflicts (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  entity_type TEXT NOT NULL,
+  entity_id INTEGER NOT NULL,
+  local_data TEXT NOT NULL,
+  remote_data TEXT NOT NULL,
+  resolution TEXT,
+  resolved_at DATETIME,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Create indices for better performance
+CREATE INDEX IF NOT EXISTS idx_sync_queue_status ON sync_queue(status);
+CREATE INDEX IF NOT EXISTS idx_sync_queue_entity ON sync_queue(entity_type, entity_id);
+CREATE INDEX IF NOT EXISTS idx_sync_conflicts_entity ON sync_conflicts(entity_type, entity_id);
+
+// In src/main/database/index.ts (or your schema file)
+db.prepare(`
+  -- Add new columns to items table
+  ALTER TABLE items
+  ADD COLUMN is_scale_item BOOLEAN DEFAULT 0,
+  ADD COLUMN scale_uom TEXT DEFAULT NULL,
+  ADD COLUMN weight_per_unit REAL DEFAULT NULL
+`).run();

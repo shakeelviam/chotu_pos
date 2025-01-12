@@ -29,7 +29,7 @@ class CustomerService {
     async searchCustomers(query) {
         try {
             const stmt = this.db.prepare(`
-        SELECT * FROM customers 
+        SELECT * FROM customers
         WHERE mobile LIKE ? OR name LIKE ?
         ORDER BY name ASC
         LIMIT 10
@@ -81,7 +81,7 @@ class CustomerService {
                 throw new Error('Customer not found');
             }
             const stmt = this.db.prepare(`
-        UPDATE customers 
+        UPDATE customers
         SET name = ?, mobile = ?, synced = 0, updated_at = ?
         WHERE id = ?
       `);
@@ -111,7 +111,7 @@ class CustomerService {
     async markAsSynced(id, erpnextId) {
         try {
             const stmt = this.db.prepare(`
-        UPDATE customers 
+        UPDATE customers
         SET synced = 1, erpnext_id = ?, updated_at = ?
         WHERE id = ?
       `);
@@ -124,12 +124,8 @@ class CustomerService {
     }
     async syncWithERPNext(erpnext) {
         try {
-            const response = await erpnext.getAxiosInstance().get('/api/resource/Customer', {
-                params: {
-                    fields: JSON.stringify(['name', 'customer_name', 'mobile_no']),
-                    limit_page_length: 1000
-                }
-            });
+            const response = await erpnext.syncCustomers();
+            const customers = response;
             const stmt = this.db.prepare(`
         INSERT INTO customers (name, mobile, erpnext_id, synced, created_at, updated_at)
         VALUES (?, ?, ?, 1, ?, ?)
@@ -147,7 +143,7 @@ class CustomerService {
                     }
                 }
             });
-            batch(response.data.data);
+            batch(customers);
             const unsyncedCustomers = await this.getUnSyncedCustomers();
             for (const customer of unsyncedCustomers) {
                 try {

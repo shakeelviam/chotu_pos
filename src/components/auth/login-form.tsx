@@ -7,7 +7,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Icons } from "@/components/icons";
 import { useToast } from "@/components/ui/use-toast";
-import { ElectronAPI } from '@/renderer';
 
 export function LoginForm() {
   const [isLoading, setIsLoading] = useState(false);
@@ -27,13 +26,9 @@ export function LoginForm() {
           title: "Success",
           description: "Logged in successfully",
         });
-        
-        // If super admin, redirect to admin page
-        if (result.user?.role === 'super_admin') {
-          router.push("/admin");
-        } else {
-          router.push("/opening");
-        }
+
+        // Always redirect to the POS Opening page first
+        router.push("/opening");
       } else {
         toast({
           variant: "destructive",

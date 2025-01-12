@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Input } from "@/components/ui/input";
@@ -20,8 +20,30 @@ export function ItemDetailsDialog({ item, onClose, onUpdate }: ItemDetailsDialog
   const [quantity, setQuantity] = useState(item.quantity.toString());
   const [rate, setRate] = useState(item.rate.toString());
   const [discountPercentage, setDiscountPercentage] = useState(item.discount_percentage?.toString() || "0");
-  const [activeInput, setActiveInput] = useState<"quantity" | "rate" | "discount">("quantity");
+  const [discountAmount, setDiscountAmount] = useState(item.discount_amount?.toString() || "0");
+  const [activeInput, setActiveInput] = useState<"quantity" | "rate" | "discount" | "discountAmount">("quantity");
   const { toast } = useToast();
+
+  // Calculate total amount before discount
+  const totalBeforeDiscount = parseFloat(quantity) * parseFloat(rate);
+
+  // Update discount amount when percentage changes
+  useEffect(() => {
+    if (activeInput === "discount") {
+      const percentage = parseFloat(discountPercentage);
+      const amount = (totalBeforeDiscount * percentage) / 100;
+      setDiscountAmount(amount.toFixed(3));
+    }
+  }, [discountPercentage, totalBeforeDiscount]);
+
+  // Update discount percentage when amount changes
+  useEffect(() => {
+    if (activeInput === "discountAmount") {
+      const amount = parseFloat(discountAmount);
+      const percentage = totalBeforeDiscount > 0 ? (amount / totalBeforeDiscount) * 100 : 0;
+      setDiscountPercentage(percentage.toFixed(3));
+    }
+  }, [discountAmount, totalBeforeDiscount]);
 
   const handleNumberClick = (value: string) => {
     switch (activeInput) {
@@ -33,6 +55,9 @@ export function ItemDetailsDialog({ item, onClose, onUpdate }: ItemDetailsDialog
         break;
       case "discount":
         setDiscountPercentage(prev => (prev === "0" ? value : prev + value));
+        break;
+      case "discountAmount":
+        setDiscountAmount(prev => (prev === "0" ? value : prev + value));
         break;
     }
   };
@@ -48,6 +73,9 @@ export function ItemDetailsDialog({ item, onClose, onUpdate }: ItemDetailsDialog
       case "discount":
         setDiscountPercentage(prev => prev.slice(0, -1) || "0");
         break;
+      case "discountAmount":
+        setDiscountAmount(prev => prev.slice(0, -1) || "0");
+        break;
     }
   };
 
@@ -61,6 +89,9 @@ export function ItemDetailsDialog({ item, onClose, onUpdate }: ItemDetailsDialog
         break;
       case "discount":
         setDiscountPercentage("0");
+        break;
+      case "discountAmount":
+        setDiscountAmount("0");
         break;
     }
   };
@@ -76,6 +107,9 @@ export function ItemDetailsDialog({ item, onClose, onUpdate }: ItemDetailsDialog
       case "discount":
         if (!discountPercentage.includes(".")) setDiscountPercentage(prev => prev + ".");
         break;
+      case "discountAmount":
+        if (!discountAmount.includes(".")) setDiscountAmount(prev => prev + ".");
+        break;
     }
   };
 
@@ -83,6 +117,7 @@ export function ItemDetailsDialog({ item, onClose, onUpdate }: ItemDetailsDialog
     const qty = parseFloat(quantity);
     const newRate = parseFloat(rate);
     const discount = parseFloat(discountPercentage);
+    const discountAmt = parseFloat(discountAmount);
 
     // Validation
     if (qty <= 0) {
@@ -105,15 +140,14 @@ export function ItemDetailsDialog({ item, onClose, onUpdate }: ItemDetailsDialog
 
     // Calculate amounts
     const amount = qty * newRate;
-    const discountAmount = (amount * discount) / 100;
 
     onUpdate({
       ...item,
       quantity: qty,
       rate: newRate,
-      amount: amount - discountAmount,
+      amount: amount - discountAmt,
       discount_percentage: discount,
-      discount_amount: discountAmount
+      discount_amount: discountAmt
     });
     onClose();
   };
@@ -161,6 +195,17 @@ export function ItemDetailsDialog({ item, onClose, onUpdate }: ItemDetailsDialog
               />
             </div>
 
+            <div className="space-y-2">
+              <Label>Discount Amount (KD)</Label>
+              <Input
+                type="text"
+                value={discountAmount}
+                className="text-left"
+                readOnly
+                onClick={() => setActiveInput("discountAmount")}
+              />
+            </div>
+
             <NumberPad
               onNumberClick={handleNumberClick}
               onBackspace={handleBackspace}
@@ -169,6 +214,7 @@ export function ItemDetailsDialog({ item, onClose, onUpdate }: ItemDetailsDialog
               onQuantity={() => setActiveInput("quantity")}
               onRate={() => setActiveInput("rate")}
               onDiscount={() => setActiveInput("discount")}
+              onDiscountAmount={() => setActiveInput("discountAmount")}
               activeInput={activeInput}
               className="mt-2"
             />
@@ -176,17 +222,17 @@ export function ItemDetailsDialog({ item, onClose, onUpdate }: ItemDetailsDialog
             <div className="space-y-2 pt-4">
               <div className="flex justify-between text-sm">
                 <span>Amount</span>
-                <span>KD {(parseFloat(quantity) * parseFloat(rate)).toFixed(3)}</span>
+                <span>KD {totalBeforeDiscount.toFixed(3)}</span>
               </div>
-              {parseFloat(discountPercentage) > 0 && (
+              {parseFloat(discountAmount) > 0 && (
                 <div className="flex justify-between text-sm text-destructive">
                   <span>Discount ({discountPercentage}%)</span>
-                  <span>- KD {((parseFloat(quantity) * parseFloat(rate) * parseFloat(discountPercentage)) / 100).toFixed(3)}</span>
+                  <span>- KD {parseFloat(discountAmount).toFixed(3)}</span>
                 </div>
               )}
               <div className="flex justify-between font-medium border-t pt-2">
                 <span>Total</span>
-                <span>KD {(parseFloat(quantity) * parseFloat(rate) * (1 - parseFloat(discountPercentage) / 100)).toFixed(3)}</span>
+                <span>KD {(totalBeforeDiscount - parseFloat(discountAmount)).toFixed(3)}</span>
               </div>
             </div>
           </div>

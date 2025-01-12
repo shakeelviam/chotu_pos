@@ -6,16 +6,25 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-export function ItemGroupSelect() {
+interface ItemGroupSelectProps {
+  value?: string;
+  onValueChange?: (value: string) => void;
+  groups: string[];
+}
+
+export function ItemGroupSelect({ value, onValueChange, groups }: ItemGroupSelectProps) {
   return (
-    <Select>
+    <Select value={value} onValueChange={onValueChange}>
       <SelectTrigger className="w-[200px]">
         <SelectValue placeholder="Select item group" />
       </SelectTrigger>
       <SelectContent>
         <SelectItem value="all">All Items</SelectItem>
-        <SelectItem value="products">Products</SelectItem>
-        <SelectItem value="services">Services</SelectItem>
+        {groups.map((group) => (
+          <SelectItem key={group} value={group}>
+            {group}
+          </SelectItem>
+        ))}
       </SelectContent>
     </Select>
   );

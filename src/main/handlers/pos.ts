@@ -1,5 +1,6 @@
 import { ipcMain } from 'electron';
 import { MockERPNextService } from '../services/mockErpnext';
+import { getDatabase } from '../database';
 
 const erpnextService = new MockERPNextService();
 
@@ -84,6 +85,126 @@ export function registerPOSHandlers() {
       return {
         success: false,
         error: 'Failed to sync POS data'
+      };
+    }
+  });
+
+  // Handle scale item barcode scan
+  ipcMain.handle('pos:parseScaleBarcode', async (_, barcode: string) => {
+    try {
+      if (!barcode || barcode.length !== 12 || !/^\d+$/.test(barcode)) {
+        throw new Error('Invalid scale barcode format');
+      }
+
+      const productCode = barcode.substring(0, 4);
+      const weightInGrams = parseInt(barcode.substring(4, 8));
+      const rateInMillis = parseInt(barcode.substring(8, 12));
+
+      if (isNaN(weightInGrams) || isNaN(rateInMillis)) {
+        throw new Error('Invalid weight or rate in barcode');
+      }
+
+      const weight = weightInGrams / 1000; // Convert to kg
+      const rate = rateInMillis / 1000; // Convert to KWD with 3 decimals
+
+      const db = getDatabase();
+      const item = db.prepare(`
+        SELECT * FROM items
+        WHERE item_group = 'Weighed Items'
+        AND scale_item_code = ?
+      `).get(productCode);
+
+      if (!item) {
+        throw new Error('Scale item not found');
+      }
+
+      const total = weight * rate;
+
+      return {
+        success: true,
+        item_code: item.item_code,
+        item_name: item.item_name,
+        weight,
+        rate,
+        total: parseFloat(total.toFixed(3)),
+        uom: item.uom || 'Kg',
+        standard_rate: item.standard_rate,
+        item_group: item.item_group
+      };
+    } catch (error: any) {
+      console.error('Failed to parse scale barcode:', error);
+      return {
+        success: false,
+        error: error.message || 'Failed to parse scale barcode'
+      };
+    }
+  });
+
+  // Calculate scale item price (for manual weight entry)
+  ipcMain.handle('pos:calculateScalePrice', async (_, data: {
+    itemCode: string,
+    weight: number
+  }) => {
+    try {
+      if (!data.weight || data.weight <= 0) {
+        throw new Error('Invalid weight value');
+      }
+
+      const db = getDatabase();
+      const item = db.prepare(`
+        SELECT * FROM items
+        WHERE item_code = ?
+        AND item_group = 'Weighed Items'
+      `).get(data.itemCode);
+
+      if (!item) {
+        throw new Error('Item not found or not a weighed item');
+      }
+
+      const total = data.weight * item.standard_rate;
+
+      return {
+        success: true,
+        item_code: item.item_code,
+        item_name: item.item_name,
+        weight: data.weight,
+        rate: item.standard_rate,
+        total: parseFloat(total.toFixed(3)),
+        uom: item.uom || 'Kg',
+        item_group: item.item_group
+      };
+    } catch (error: any) {
+      console.error('Failed to calculate scale price:', error);
+      return {
+        success: false,
+        error: error.message
+      };
+    }
+  });
+
+  // Get item by scale code
+  ipcMain.handle('pos:getItemByScaleCode', async (_, scaleCode: string) => {
+    try {
+      const db = getDatabase();
+      const item = db.prepare(`
+        SELECT * FROM items
+        WHERE item_group = 'Weighed Items'
+        AND scale_item_code = ?
+      `).get(scaleCode);
+
+      if (!item) {
+        throw new Error('Scale item not found');
+      }
+
+      return {
+        success: true,
+        item: item
+      };
+    } catch (error: any) {
+      console.error('Failed to get item by scale code:', error);
+      return {
+        success: false,
+        error: error.message
       };
     }
   });

@@ -33,7 +33,7 @@ export class CustomerService {
   async searchCustomers(query: string): Promise<Customer[]> {
     try {
       const stmt = this.db.prepare(`
-        SELECT * FROM customers 
+        SELECT * FROM customers
         WHERE mobile LIKE ? OR name LIKE ?
         ORDER BY name ASC
         LIMIT 10
@@ -63,7 +63,7 @@ export class CustomerService {
         INSERT INTO customers (name, mobile, erpnext_id, synced, created_at, updated_at)
         VALUES (?, ?, ?, 0, ?, ?)
       `);
-      
+
       const result = stmt.run(
         customer.name,
         customer.mobile,
@@ -94,7 +94,7 @@ export class CustomerService {
       }
 
       const stmt = this.db.prepare(`
-        UPDATE customers 
+        UPDATE customers
         SET name = ?, mobile = ?, synced = 0, updated_at = ?
         WHERE id = ?
       `);
@@ -131,7 +131,7 @@ export class CustomerService {
   async markAsSynced(id: number, erpnextId: string): Promise<void> {
     try {
       const stmt = this.db.prepare(`
-        UPDATE customers 
+        UPDATE customers
         SET synced = 1, erpnext_id = ?, updated_at = ?
         WHERE id = ?
       `);
@@ -144,15 +144,9 @@ export class CustomerService {
 
   async syncWithERPNext(erpnext: ERPNextService): Promise<{ success: boolean }> {
     try {
-      // 1. Get all customers from ERPNext
-      const response = await erpnext.getAxiosInstance().get('/api/resource/Customer', {
-        params: {
-          fields: JSON.stringify(['name', 'customer_name', 'mobile_no']),
-          limit_page_length: 1000
-        }
-      });
+      const response = await erpnext.syncCustomers();
+      const customers = response as ERPNextCustomer[];
 
-      // 2. Update local database with ERPNext customers
       const stmt = this.db.prepare(`
         INSERT INTO customers (name, mobile, erpnext_id, synced, created_at, updated_at)
         VALUES (?, ?, ?, 1, ?, ?)
@@ -166,7 +160,7 @@ export class CustomerService {
       const now = new Date().toISOString();
       const batch = this.db.transaction((customers: ERPNextCustomer[]) => {
         for (const customer of customers) {
-          if (customer.mobile_no) { // Only sync customers with mobile numbers
+          if (customer.mobile_no) {
             stmt.run(
               customer.customer_name,
               customer.mobile_no,
@@ -178,9 +172,9 @@ export class CustomerService {
         }
       });
 
-      batch(response.data.data);
+      batch(customers);
 
-      // 3. Sync local unsynced customers to ERPNext
+      // Handle unsynced local customers
       const unsyncedCustomers = await this.getUnSyncedCustomers();
       for (const customer of unsyncedCustomers) {
         try {
@@ -188,8 +182,8 @@ export class CustomerService {
             doctype: 'Customer',
             customer_name: customer.name,
             customer_type: 'Individual',
-            customer_group: 'Individual', // You might want to make this configurable
-            territory: 'All Territories', // You might want to make this configurable
+            customer_group: 'Individual',
+            territory: 'All Territories',
             mobile_no: customer.mobile
           };
 
@@ -197,7 +191,6 @@ export class CustomerService {
           await this.markAsSynced(customer.id!, result.data.data.name);
         } catch (error) {
           console.error(`Failed to sync customer ${customer.id}:`, error);
-          // Continue with next customer even if one fails
         }
       }
 
@@ -215,11 +208,9 @@ export class CustomerService {
         return null;
       }
 
-      // Get customer details from ERPNext
       const response = await erpnext.getAxiosInstance().get(`/api/resource/Customer/${posProfile.customer}`);
       const customer = response.data.data as ERPNextCustomer;
 
-      // Make sure this customer is in our local DB
       const stmt = this.db.prepare(`
         INSERT INTO customers (name, mobile, erpnext_id, synced, created_at, updated_at)
         VALUES (?, ?, ?, 1, ?, ?)

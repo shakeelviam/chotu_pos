@@ -7,6 +7,7 @@ const config_1 = require("./config");
 class ERPNextService {
     constructor(config) {
         this.posProfile = null;
+        this.currentSession = null;
         this.config = config;
         this.axiosInstance = axios_1.default.create({
             baseURL: config.url,
@@ -25,6 +26,9 @@ class ERPNextService {
             ERPNextService.instance = new ERPNextService(config);
         }
         return ERPNextService.instance;
+    }
+    getAxiosInstance() {
+        return this.axiosInstance;
     }
     async authenticate(username, password) {
         try {
@@ -61,6 +65,81 @@ class ERPNextService {
                 success: false,
                 error: error.response?.data?.message || 'Authentication failed'
             };
+        }
+    }
+    async createPOSOpeningEntry(data) {
+        try {
+            const response = await this.axiosInstance.post('/api/resource/POS Opening Entry', {
+                doctype: 'POS Opening Entry',
+                company: data.company,
+                pos_profile: data.pos_profile,
+                balance_details: data.balance_details,
+                status: 'Open',
+                posting_date: new Date().toISOString().split('T')[0],
+            });
+            if (response.data.data) {
+                this.currentSession = response.data.data.name;
+                return {
+                    success: true,
+                    session_id: response.data.data.name
+                };
+            }
+            throw new Error('Failed to create POS Opening Entry');
+        }
+        catch (error) {
+            console.error('POS Opening Entry error:', error);
+            return {
+                success: false,
+                error: error.response?.data?.message || 'Failed to create POS Opening Entry'
+            };
+        }
+    }
+    async createPOSClosingEntry(data) {
+        try {
+            const response = await this.axiosInstance.post('/api/resource/POS Closing Entry', {
+                doctype: 'POS Closing Entry',
+                pos_opening_entry: data.pos_opening_entry,
+                closing_details: data.closing_details,
+                posting_date: new Date().toISOString().split('T')[0],
+                status: 'Submitted'
+            });
+            if (response.data.data) {
+                this.currentSession = null;
+                return { success: true };
+            }
+            throw new Error('Failed to create POS Closing Entry');
+        }
+        catch (error) {
+            console.error('POS Closing Entry error:', error);
+            return {
+                success: false,
+                error: error.response?.data?.message || 'Failed to create POS Closing Entry'
+            };
+        }
+    }
+    async getCurrentPOSSession() {
+        if (this.currentSession) {
+            return { session_id: this.currentSession };
+        }
+        try {
+            const response = await this.axiosInstance.get('/api/resource/POS Opening Entry', {
+                params: {
+                    filters: JSON.stringify([
+                        ['status', '=', 'Open'],
+                        ['docstatus', '=', 1]
+                    ]),
+                    limit: 1
+                }
+            });
+            if (response.data.data?.length > 0) {
+                this.currentSession = response.data.data[0].name;
+                return { session_id: this.currentSession };
+            }
+            return { error: 'No active POS session found' };
+        }
+        catch (error) {
+            console.error('Get POS Session error:', error);
+            return { error: error.response?.data?.message || 'Failed to get POS session' };
         }
     }
     async getPOSProfile(profileName) {
@@ -101,20 +180,16 @@ class ERPNextService {
     getCurrentPOSProfile() {
         return this.posProfile;
     }
-    getAxiosInstance() {
-        return this.axiosInstance;
-    }
     async syncAll() {
         try {
             await this.getPOSProfile();
-            const items = await this.syncItems();
-            const customers = await this.syncCustomers();
-            const payments = await this.syncPaymentMethods();
-            const taxes = await this.syncTaxTemplates();
-            const priceLists = await this.syncPriceLists();
-            return {
-                success: true
-            };
+            await this.syncItems();
+            await this.syncCustomers();
+            await this.syncPaymentMethods();
+            await this.syncTaxTemplates();
+            await this.syncPriceLists();
+            await this.syncScaleItems();
+            return { success: true };
         }
         catch (error) {
             console.error('Sync failed:', error);
@@ -124,27 +199,104 @@ class ERPNextService {
             };
         }
     }
-    async testConnection() {
-        try {
-            const response = await this.axiosInstance.get('/api/method/frappe.auth.get_logged_user');
-            return { success: true };
-        }
-        catch (error) {
-            console.error('Connection test failed:', error);
-            return {
-                success: false,
-                error: error.response?.data?.message || 'Connection test failed'
-            };
-        }
-    }
     async syncItems() {
         const response = await this.axiosInstance.get('/api/method/erpnext.stock.get_all_items', {
             params: {
                 warehouse: this.posProfile?.warehouse,
-                price_list: this.posProfile?.price_list
+                price_list: this.posProfile?.price_list,
+                fields: JSON.stringify([
+                    'name', 'item_name', 'item_code', 'standard_rate', 'stock_uom',
+                    'is_stock_item', 'has_batch_no', 'has_serial_no', 'item_group',
+                    'custom_scale_item_code'
+                ])
             }
         });
         return response.data.message || [];
+    }
+    async syncScaleItems() {
+        const response = await this.axiosInstance.get('/api/method/erpnext.stock.get_all_items', {
+            params: {
+                warehouse: this.posProfile?.warehouse,
+                price_list: this.posProfile?.price_list,
+                filters: JSON.stringify([['item_group', '=', 'Weighed Items']]),
+                fields: JSON.stringify([
+                    'name', 'item_name', 'item_code', 'standard_rate',
+                    'stock_uom', 'custom_scale_item_code'
+                ])
+            }
+        });
+        return response.data.message || [];
+    }
+    async getScaleItemDetails(itemCode) {
+        try {
+            const response = await this.axiosInstance.get(`/api/resource/Item/${itemCode}`, {
+                params: {
+                    fields: JSON.stringify([
+                        'item_code',
+                        'custom_scale_item_code',
+                        'standard_rate',
+                        'stock_uom',
+                        'item_group'
+                    ])
+                }
+            });
+            const item = response.data.data;
+            if (item && item.item_group === 'Weighed Items') {
+                return {
+                    success: true,
+                    data: {
+                        item_code: item.item_code,
+                        scale_item_code: item.custom_scale_item_code,
+                        standard_rate: item.standard_rate,
+                        uom: item.stock_uom
+                    }
+                };
+            }
+            throw new Error('Scale item details not found');
+        }
+        catch (error) {
+            console.error('Failed to get scale item details:', error);
+            return {
+                success: false,
+                error: error.response?.data?.message || 'Failed to get scale item details'
+            };
+        }
+    }
+    async parseScaleBarcode(barcode) {
+        try {
+            const scaleItemCode = barcode.substring(0, 4);
+            const weight = parseInt(barcode.substring(4, 8)) / 1000;
+            const rate = parseInt(barcode.substring(8, 12)) / 1000;
+            const response = await this.axiosInstance.get('/api/resource/Item', {
+                params: {
+                    filters: JSON.stringify([
+                        ['custom_scale_item_code', '=', scaleItemCode],
+                        ['item_group', '=', 'Weighed Items']
+                    ]),
+                    limit: 1
+                }
+            });
+            if (response.data.data?.length > 0) {
+                const item = response.data.data[0];
+                return {
+                    success: true,
+                    data: {
+                        item_code: item.name,
+                        weight,
+                        rate,
+                        total: parseFloat((weight * rate).toFixed(3))
+                    }
+                };
+            }
+            throw new Error('Scale item not found');
+        }
+        catch (error) {
+            console.error('Failed to parse scale barcode:', error);
+            return {
+                success: false,
+                error: error.response?.data?.message || 'Failed to parse scale barcode'
+            };
+        }
     }
     async syncCustomers() {
         const response = await this.axiosInstance.get('/api/method/erpnext.selling.get_customers', {
@@ -177,6 +329,40 @@ class ERPNextService {
             }
         });
         return response.data.message || [];
+    }
+    async syncInvoice(invoice) {
+        try {
+            const response = await this.axiosInstance.post('/api/resource/POS Invoice', {
+                doctype: 'POS Invoice',
+                ...invoice,
+                docstatus: 1,
+                is_pos: 1,
+                pos_profile: this.posProfile?.name,
+                created_at: invoice.created_at || new Date().toISOString(),
+                updated_at: new Date().toISOString()
+            });
+            return { success: true };
+        }
+        catch (error) {
+            console.error('Invoice sync error:', error);
+            return {
+                success: false,
+                error: error.response?.data?.message || 'Failed to sync invoice'
+            };
+        }
+    }
+    async testConnection() {
+        try {
+            const response = await this.axiosInstance.get('/api/method/frappe.auth.get_logged_user');
+            return { success: true };
+        }
+        catch (error) {
+            console.error('Connection test failed:', error);
+            return {
+                success: false,
+                error: error.response?.data?.message || 'Connection test failed'
+            };
+        }
     }
 }
 exports.ERPNextService = ERPNextService;

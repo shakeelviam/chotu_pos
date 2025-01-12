@@ -67,13 +67,13 @@ export default function OpeningPage() {
 
       const result = await window.electron.createPOSOpening(data);
       console.log("POS Opening result:", result);
-      
+
       if (result.success) {
         toast({
           title: "Success",
           description: "POS Opening created successfully",
         });
-        router.push("/dashboard");
+        router.push("/pos"); // Redirect to POS interface after successful opening
       } else {
         toast({
           variant: "destructive",

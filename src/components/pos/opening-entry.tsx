@@ -1,17 +1,17 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useFieldArray, useForm } from "react-hook-form";
 import * as z from "zod";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Plus, Trash } from "lucide-react";
+import { Plus, Trash, Loader2 } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
+import { useRouter } from "next/navigation";
 
 const formSchema = z.object({
   company: z.string().min(1, "Company is required"),
@@ -24,13 +24,30 @@ const formSchema = z.object({
 
 type OpeningEntryData = z.infer<typeof formSchema>;
 
-interface OpeningEntryProps {
-  open: boolean;
-  onClose: () => void;
-  onSubmit: (data: OpeningEntryData) => void;
+interface Company {
+  name: string;
+  label: string;
 }
 
-export function POSOpeningEntry({ open, onClose, onSubmit }: OpeningEntryProps) {
+interface POSProfile {
+  name: string;
+  label: string;
+}
+
+interface PaymentMethod {
+  name: string;
+  type: string;
+}
+
+export default function POSOpeningPage() {
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [companies, setCompanies] = useState<Company[]>([]);
+  const [profiles, setProfiles] = useState<POSProfile[]>([]);
+  const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
+  const router = useRouter();
+  const { toast } = useToast();
+
   const form = useForm<OpeningEntryData>({
     resolver: zodResolver(formSchema),
     defaultValues: {
@@ -47,29 +64,95 @@ export function POSOpeningEntry({ open, onClose, onSubmit }: OpeningEntryProps) 
     name: "balanceDetails"
   });
 
-  const { toast } = useToast();
+  useEffect(() => {
+    const loadInitialData = async () => {
+      try {
+        // Load companies
+        const companiesResponse = await window.electron.getCompanies();
+        if (companiesResponse.success) {
+          setCompanies(companiesResponse.companies);
+        }
 
-  const handleSubmit = async (data: OpeningEntryData) => {
+        // Load payment methods
+        const methodsResponse = await window.electron.getPaymentMethods();
+        if (methodsResponse.success) {
+          setPaymentMethods(methodsResponse.methods);
+        }
+
+        setIsLoading(false);
+      } catch (error) {
+        console.error("Failed to load initial data:", error);
+        toast({
+          variant: "destructive",
+          title: "Error",
+          description: "Failed to load required data. Please try again.",
+        });
+      }
+    };
+
+    loadInitialData();
+  }, []);
+
+  // Load POS profiles when company changes
+  const onCompanyChange = async (company: string) => {
     try {
-      await onSubmit(data);
-      onClose();
+      const response = await window.electron.getPOSProfiles(company);
+      if (response.success) {
+        setProfiles(response.profiles);
+        form.setValue("company", company);
+        form.setValue("posProfile", ""); // Reset POS profile when company changes
+      }
     } catch (error) {
-      console.error("Error submitting opening entry:", error);
+      console.error("Failed to load POS profiles:", error);
       toast({
         variant: "destructive",
         title: "Error",
-        description: "Failed to submit opening entry",
+        description: "Failed to load POS profiles",
       });
     }
   };
 
+  const handleSubmit = async (data: OpeningEntryData) => {
+    setIsSubmitting(true);
+    try {
+      const result = await window.electron.createPOSOpening(data);
+      if (result.success) {
+        toast({
+          title: "Success",
+          description: "POS Opening Entry created successfully",
+        });
+        router.push("/pos"); // Redirect to POS interface
+      } else {
+        throw new Error(result.error || "Failed to create POS Opening Entry");
+      }
+    } catch (error: any) {
+      console.error("Error submitting opening entry:", error);
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: error.message || "Failed to submit opening entry",
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <Loader2 className="h-8 w-8 animate-spin" />
+      </div>
+    );
+  }
+
   return (
-    <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-2xl">
-        <DialogHeader>
-          <DialogTitle>Create POS Opening Entry</DialogTitle>
-        </DialogHeader>
-        
+    <div className="container mx-auto max-w-3xl py-8">
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-2xl font-bold">Create POS Opening Entry</h1>
+          <p className="text-muted-foreground">Enter opening balance details to start POS session</p>
+        </div>
+
         <Form {...form}>
           <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-6">
             <FormField
@@ -78,15 +161,21 @@ export function POSOpeningEntry({ open, onClose, onSubmit }: OpeningEntryProps) 
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Company</FormLabel>
-                  <Select onValueChange={field.onChange} defaultValue={field.value}>
+                  <Select
+                    onValueChange={(value) => onCompanyChange(value)}
+                    value={field.value}
+                  >
                     <FormControl>
                       <SelectTrigger>
                         <SelectValue placeholder="Select company" />
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      <SelectItem value="company1">Company 1</SelectItem>
-                      <SelectItem value="company2">Company 2</SelectItem>
+                      {companies.map((company) => (
+                        <SelectItem key={company.name} value={company.name}>
+                          {company.label}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                   <FormMessage />
@@ -100,15 +189,18 @@ export function POSOpeningEntry({ open, onClose, onSubmit }: OpeningEntryProps) 
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>POS Profile</FormLabel>
-                  <Select onValueChange={field.onChange} defaultValue={field.value}>
+                  <Select onValueChange={field.onChange} value={field.value}>
                     <FormControl>
                       <SelectTrigger>
                         <SelectValue placeholder="Select POS profile" />
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      <SelectItem value="retail">Retail POS</SelectItem>
-                      <SelectItem value="restaurant">Restaurant POS</SelectItem>
+                      {profiles.map((profile) => (
+                        <SelectItem key={profile.name} value={profile.name}>
+                          {profile.label}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                   <FormMessage />
@@ -126,7 +218,7 @@ export function POSOpeningEntry({ open, onClose, onSubmit }: OpeningEntryProps) 
                   onClick={() => append({ modeOfPayment: "", openingAmount: 0 })}
                 >
                   <Plus className="w-4 h-4 mr-2" />
-                  Add Row
+                  Add Payment Method
                 </Button>
               </div>
 
@@ -149,13 +241,15 @@ export function POSOpeningEntry({ open, onClose, onSubmit }: OpeningEntryProps) 
                             <Select onValueChange={field.onChange} value={field.value}>
                               <FormControl>
                                 <SelectTrigger>
-                                  <SelectValue placeholder="Select mode" />
+                                  <SelectValue placeholder="Select payment mode" />
                                 </SelectTrigger>
                               </FormControl>
                               <SelectContent>
-                                <SelectItem value="cash">Cash</SelectItem>
-                                <SelectItem value="card">Card</SelectItem>
-                                <SelectItem value="bank">Bank Transfer</SelectItem>
+                                {paymentMethods.map((method) => (
+                                  <SelectItem key={method.name} value={method.name}>
+                                    {method.name}
+                                  </SelectItem>
+                                ))}
                               </SelectContent>
                             </Select>
                           )}
@@ -168,6 +262,7 @@ export function POSOpeningEntry({ open, onClose, onSubmit }: OpeningEntryProps) 
                           render={({ field }) => (
                             <Input
                               type="number"
+                              step="0.001"
                               {...field}
                               onChange={e => field.onChange(parseFloat(e.target.value))}
                             />
@@ -192,12 +287,17 @@ export function POSOpeningEntry({ open, onClose, onSubmit }: OpeningEntryProps) 
             </div>
 
             <div className="flex justify-end space-x-2">
-              <Button variant="outline" onClick={onClose}>Cancel</Button>
-              <Button type="submit">Submit</Button>
+              <Button variant="outline" onClick={() => router.back()}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={isSubmitting}>
+                {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Submit
+              </Button>
             </div>
           </form>
         </Form>
-      </DialogContent>
-    </Dialog>
+      </div>
+    </div>
   );
 }

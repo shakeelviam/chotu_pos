@@ -1,7 +1,7 @@
 console.log('PRELOAD SCRIPT STARTING - ' + new Date().toISOString());
 
 import { contextBridge, ipcRenderer } from 'electron';
-import { AuthResponse } from '@/types';
+import { AuthResponse, POSOpeningEntry, POSBalanceDetail } from '@/types';
 
 // Expose protected methods that allow the renderer process to use
 // the ipcRenderer without exposing the entire object
@@ -14,9 +14,9 @@ contextBridge.exposeInMainWorld(
     close: () => ipcRenderer.invoke('window:close'),
 
     // Auth
-    login: async (credentials: { username: string; password: string }): Promise<AuthResponse> => 
+    login: async (credentials: { username: string; password: string }): Promise<AuthResponse> =>
       ipcRenderer.invoke('auth:login', credentials),
-    adminLogin: async (credentials: { username: string; password: string }): Promise<AuthResponse> => 
+    adminLogin: async (credentials: { username: string; password: string }): Promise<AuthResponse> =>
       ipcRenderer.invoke('auth:adminLogin', credentials),
     logout: async () => ipcRenderer.invoke('auth:logout'),
     getSettings: async () => ipcRenderer.invoke('auth:getSettings'),
@@ -40,10 +40,21 @@ contextBridge.exposeInMainWorld(
 
     // POS Session
     getCurrentSession: async () => ipcRenderer.invoke('pos:getCurrentSession'),
+    getCompanies: async () => ipcRenderer.invoke('getCompanies'),
+    getPaymentMethods: async () => ipcRenderer.invoke('getPaymentMethods'),
+    getPOSProfiles: async (company: string) => ipcRenderer.invoke('getPOSProfiles', company),
+    createPOSOpening: async (data: {
+      company: string;
+      posProfile: string;
+      balanceDetails: POSBalanceDetail[];
+    }) => ipcRenderer.invoke('createPOSOpening', data),
+    getCurrentPOSEntry: async () => ipcRenderer.invoke('getCurrentPOSEntry'),
+    closePOSEntry: async (data: {
+      id: string;
+      closingDetails: POSBalanceDetail[];
+    }) => ipcRenderer.invoke('closePOSEntry', data),
     openSession: async () => ipcRenderer.invoke('pos:openSession'),
     closeSession: async () => ipcRenderer.invoke('pos:closeSession'),
-    createPOSOpening: async (data: { cashAmount: number; knetAmount: number; profile: string }) => 
-      ipcRenderer.invoke('pos:createOpening', data),
     endSession: async () => ipcRenderer.invoke('pos:endSession'),
     getSessions: async () => ipcRenderer.invoke('pos:getSessions'),
     getSessionById: async (id: number) => ipcRenderer.invoke('pos:getSessionById', id),
@@ -52,12 +63,13 @@ contextBridge.exposeInMainWorld(
     syncItems: async () => ipcRenderer.invoke('sync:items'),
     syncAll: async () => ipcRenderer.invoke('sync:all'),
     getSyncStatus: async () => ipcRenderer.invoke('sync:status'),
+    syncPOSData: async () => ipcRenderer.invoke('syncPOSData'),
 
     // Admin
     testERPNextConnection: async (config: any) => ipcRenderer.invoke('admin:test-connection', config),
     getERPNextConfig: async () => ipcRenderer.invoke('admin:get-erpnext-config'),
     saveERPNextConfig: async (config: any) => ipcRenderer.invoke('admin:save-erpnext-config', config),
-    getPOSProfiles: async () => ipcRenderer.invoke('admin:get-pos-profiles'),
+    getPOSProfilesAdmin: async () => ipcRenderer.invoke('admin:get-pos-profiles'),
     getRoleConfigs: async () => ipcRenderer.invoke('admin:get-role-configs'),
     saveRoleConfig: async (config: any) => ipcRenderer.invoke('admin:save-role-config', config),
     deleteRoleConfig: async (role: string) => ipcRenderer.invoke('admin:delete-role-config', role),
